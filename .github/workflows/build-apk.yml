@@ -41,7 +41,10 @@ jobs:
       - name: Ajustar Java a 17
         run: |
           sed -i 's/VERSION_1_8/VERSION_17/g' source/PoolGuideAndroid/app/build.gradle
-      - name: Compilar APK
+            - name: Comprobar configuración Java
+        run: |
+          find source/PoolGuideAndroid -name 'build.gradle*' -type f -print
+          grep -RniE 'sourceCompatibility|targetCompatibility|jvmTarget|VERSION_1_8|VERSION_17|jvmToolchain' source/PoolGuideAndroid --include='*.gradle' --include='*.gradle.kts' || true name: Compilar APK
         run: |
           cd source/PoolGuideAndroid
           gradle assembleDebug
