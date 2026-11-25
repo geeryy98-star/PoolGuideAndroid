@@ -37,6 +37,10 @@ jobs:
           mkdir source
           unzip *.zip -d source
 
+                - name: Aplicar nuevo MainActivity
+        run: |
+          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt
+
       - name: Corregir compatibilidad Java
         run: |
           cat >> source/PoolGuideAndroid/app/build.gradle <<'EOF'
