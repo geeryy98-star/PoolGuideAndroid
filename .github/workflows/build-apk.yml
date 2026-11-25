@@ -37,7 +37,7 @@ jobs:
           mkdir source
           unzip *.zip -d source
 
-                - name: Aplicar nuevo MainActivity
+      - name: Aplicar nuevo MainActivity
         run: |
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt
 
@@ -68,4 +68,4 @@ jobs:
         with:
           name: PoolGuide-APK
           path: source/PoolGuideAndroid/app/build/outputs/apk/debug/*.apk
-
+          
