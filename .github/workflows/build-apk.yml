@@ -25,9 +25,7 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -38,13 +36,25 @@ jobs:
         run: |
           mkdir source
           unzip *.zip -d source
-      - name: Ajustar Java a 17
+
+      - name: Corregir compatibilidad Java
         run: |
-          sed -i 's/VERSION_1_8/VERSION_17/g' source/PoolGuideAndroid/app/build.gradle
-            - name: Comprobar configuración Java
+          cat >> source/PoolGuideAndroid/app/build.gradle <<'EOF'
+
+          android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
+      - name: Comprobar configuración
         run: |
           find source/PoolGuideAndroid -name 'build.gradle*' -type f -print
-          grep -RniE 'sourceCompatibility|targetCompatibility|jvmTarget|VERSION_1_8|VERSION_17|jvmToolchain' source/PoolGuideAndroid --include='*.gradle' --include='*.gradle.kts' || true name: Compilar APK
+          grep -RniE 'sourceCompatibility|targetCompatibility|jvmTarget' source/PoolGuideAndroid --include='*.gradle' --include='*.gradle.kts' || true
+
+      - name: Compilar APK
         run: |
           cd source/PoolGuideAndroid
           gradle assembleDebug
@@ -54,4 +64,4 @@ jobs:
         with:
           name: PoolGuide-APK
           path: source/PoolGuideAndroid/app/build/outputs/apk/debug/*.apk
-          
+
