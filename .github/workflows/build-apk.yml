@@ -40,7 +40,7 @@ jobs:
           unzip *.zip -d source
       - name: Ajustar Java a 17
         run: |
-          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' source/PoolGuideAndroid/app/build.gradle
+          sed -i 's/VERSION_1_8/VERSION_17/g' source/PoolGuideAndroid/app/build.gradle
       - name: Compilar APK
         run: |
           cd source/PoolGuideAndroid
