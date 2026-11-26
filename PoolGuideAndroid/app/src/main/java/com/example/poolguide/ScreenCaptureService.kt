@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.widget.Toast
 
 class ScreenCaptureService : Service() {
 
@@ -39,37 +40,41 @@ class ScreenCaptureService : Service() {
         startId: Int
     ): Int {
 
-        createNotification("Preparando captura de pantalla")
-
-        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-
-        val data = if (Build.VERSION.SDK_INT >= 33) {
-            intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent?.getParcelableExtra(EXTRA_DATA)
-        }
-
-        if (data == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
         try {
+            createNotification("Preparando captura de pantalla")
+
+            val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+
+            val data: Intent? = if (Build.VERSION.SDK_INT >= 33) {
+                intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent?.getParcelableExtra(EXTRA_DATA)
+            }
+
+            if (data == null) {
+                showError("No se han recibido los datos del permiso")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
             val manager = getSystemService(
                 Context.MEDIA_PROJECTION_SERVICE
             ) as MediaProjectionManager
 
             mediaProjection = manager.getMediaProjection(resultCode, data)
 
+            if (mediaProjection == null) {
+                showError("Android no ha iniciado MediaProjection")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
             val metrics = resources.displayMetrics
-            val width = metrics.widthPixels
-            val height = metrics.heightPixels
-            val density = metrics.densityDpi
 
             imageReader = ImageReader.newInstance(
-                width,
-                height,
+                metrics.widthPixels,
+                metrics.heightPixels,
                 PixelFormat.RGBA_8888,
                 2
             )
@@ -84,8 +89,13 @@ class ScreenCaptureService : Service() {
                         if (!firstFrameReceived) {
                             firstFrameReceived = true
                             createNotification(
-                                "Captura funcionando: primer fotograma recibido"
+                                "Captura funcionando: fotograma recibido"
                             )
+                            Toast.makeText(
+                                this,
+                                "POOL GUIDE: captura funcionando",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 },
@@ -103,9 +113,9 @@ class ScreenCaptureService : Service() {
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "PoolGuideCapture",
-                width,
-                height,
-                density,
+                metrics.widthPixels,
+                metrics.heightPixels,
+                metrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader?.surface,
                 null,
@@ -113,14 +123,31 @@ class ScreenCaptureService : Service() {
             )
 
             if (virtualDisplay == null) {
+                showError("No se ha podido crear la pantalla virtual")
                 stopSelf()
+            } else {
+                createNotification("Captura iniciada; esperando imagen")
             }
 
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            showError("Error de captura: ${e.message ?: e.javaClass.simpleName}")
             stopSelf()
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun showError(message: String) {
+        Toast.makeText(
+            this,
+            message,
+            Toast.LENGTH_LONG
+        ).show()
+
+        try {
+            createNotification(message)
+        } catch (_: Exception) {
+        }
     }
 
     private fun createNotification(message: String) {
