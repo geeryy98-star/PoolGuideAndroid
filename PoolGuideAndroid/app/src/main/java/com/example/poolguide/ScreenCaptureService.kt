@@ -18,8 +18,6 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
-import android.widget.Toast
 
 class ScreenCaptureService : Service() {
 
@@ -29,12 +27,17 @@ class ScreenCaptureService : Service() {
 
     private var frames = 0
     private var lastReport = System.currentTimeMillis()
+    private var firstFrame = false
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "capture_data"
+
         private const val CHANNEL_ID = "pool_guide_capture"
         private const val NOTIFICATION_ID = 2
+
+        const val ACTION_CAPTURE_STATUS =
+            "com.example.poolguide.CAPTURE_STATUS"
     }
 
     override fun onStartCommand(
@@ -57,7 +60,7 @@ class ScreenCaptureService : Service() {
             }
 
             if (data == null) {
-                showError("No se recibieron los datos del permiso")
+                sendStatus("ERROR: falta permiso de captura")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -69,7 +72,7 @@ class ScreenCaptureService : Service() {
             mediaProjection = manager.getMediaProjection(resultCode, data)
 
             if (mediaProjection == null) {
-                showError("No se pudo iniciar MediaProjection")
+                sendStatus("ERROR: captura no iniciada")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -91,9 +94,15 @@ class ScreenCaptureService : Service() {
                         try {
                             frames++
 
+                            if (!firstFrame) {
+                                firstFrame = true
+                                sendStatus("RECIBIENDO IMAGEN")
+                            }
+
                             val now = System.currentTimeMillis()
 
                             if (now - lastReport >= 3000) {
+
                                 val seconds =
                                     (now - lastReport) / 1000.0
 
@@ -101,7 +110,7 @@ class ScreenCaptureService : Service() {
                                 val brightness = measureBrightness(image)
 
                                 val state = if (brightness < 15) {
-                                    "IMAGEN MUY OSCURA"
+                                    "IMAGEN OSCURA"
                                 } else {
                                     "IMAGEN VISIBLE"
                                 }
@@ -109,13 +118,7 @@ class ScreenCaptureService : Service() {
                                 val message =
                                     "FPS: ${"%.1f".format(fps)} | $state | Luz: $brightness"
 
-                                createNotification(message)
-
-                                Toast.makeText(
-                                    this,
-                                    message,
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                sendStatus(message)
 
                                 frames = 0
                                 lastReport = now
@@ -127,16 +130,17 @@ class ScreenCaptureService : Service() {
                         }
                     }
                 },
-                Handler(Looper.getMainLooper())
+                Handler(mainLooper)
             )
 
             mediaProjection?.registerCallback(
                 object : MediaProjection.Callback() {
                     override fun onStop() {
+                        sendStatus("CAPTURA DETENIDA")
                         stopSelf()
                     }
                 },
-                Handler(Looper.getMainLooper())
+                Handler(mainLooper)
             )
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
@@ -151,14 +155,16 @@ class ScreenCaptureService : Service() {
             )
 
             if (virtualDisplay == null) {
-                showError("No se pudo crear la pantalla virtual")
+                sendStatus("ERROR: pantalla virtual")
                 stopSelf()
             } else {
-                createNotification("Esperando imágenes")
+                sendStatus("ESPERANDO IMAGEN")
             }
 
         } catch (e: Exception) {
-            showError("Error: ${e.message ?: e.javaClass.simpleName}")
+            sendStatus(
+                "ERROR: ${e.message ?: e.javaClass.simpleName}"
+            )
             stopSelf()
         }
 
@@ -200,17 +206,16 @@ class ScreenCaptureService : Service() {
         return if (samples > 0) total / samples else 0
     }
 
-    private fun showError(message: String) {
-        Toast.makeText(
-            this,
-            message,
-            Toast.LENGTH_LONG
-        ).show()
+    private fun sendStatus(message: String) {
 
-        try {
-            createNotification(message)
-        } catch (_: Exception) {
+        createNotification(message)
+
+        val broadcast = Intent(ACTION_CAPTURE_STATUS).apply {
+            setPackage(packageName)
+            putExtra("status", message)
         }
+
+        sendBroadcast(broadcast)
     }
 
     private fun createNotification(message: String) {
@@ -252,6 +257,12 @@ class ScreenCaptureService : Service() {
         virtualDisplay = null
         imageReader = null
         mediaProjection = null
+
+        sendBroadcast(
+            Intent(ACTION_CAPTURE_STATUS)
+                .setPackage(packageName)
+                .putExtra("status", "CAPTURA DETENIDA")
+        )
 
         super.onDestroy()
     }
