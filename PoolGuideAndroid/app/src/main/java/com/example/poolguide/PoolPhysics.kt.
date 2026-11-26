@@ -1,0 +1,222 @@
+
+package com.example.poolguide
+
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
+
+data class PhysicsBall(
+    val id: Int,
+    var position: PoolPoint,
+    var velocity: PoolPoint,
+    val radius: Float,
+    var pocketed: Boolean = false
+)
+
+data class PhysicsSettings(
+    val restitution: Float = 0.94f,
+    val cushionRestitution: Float = 0.82f,
+    val friction: Float = 0.985f,
+    val stopSpeed: Float = 0.001f,
+    val maximumSubsteps: Int = 8
+)
+
+data class PhysicsEvent(
+    val type: Type,
+    val firstBallId: Int,
+    val secondBallId: Int? = null,
+    val position: PoolPoint
+) {
+    enum class Type {
+        BALL_COLLISION,
+        CUSHION_REBOUND,
+        POCKETED
+    }
+}
+
+object PoolPhysics {
+
+    fun simulate(
+        balls: MutableList<PhysicsBall>,
+        table: PoolTableBounds,
+        pockets: List<PoolPocket>,
+        deltaTime: Float,
+        settings: PhysicsSettings = PhysicsSettings()
+    ): List<PhysicsEvent> {
+
+        if (deltaTime <= 0f) return emptyList()
+
+        val events = mutableListOf<PhysicsEvent>()
+
+        val substeps = settings.maximumSubsteps.coerceIn(1, 16)
+        val stepTime = deltaTime / substeps
+
+        repeat(substeps) {
+
+            for (ball in balls) {
+                if (ball.pocketed) continue
+
+                ball.position = ball.position +
+                    ball.velocity * stepTime
+
+                applyFriction(ball, settings)
+
+                if (isInsidePocket(ball, pockets)) {
+                    ball.pocketed = true
+                    ball.velocity = PoolPoint(0f, 0f)
+
+                    events += PhysicsEvent(
+                        PhysicsEvent.Type.POCKETED,
+                        ball.id,
+                        position = ball.position
+                    )
+
+                    continue
+                }
+
+                if (handleCushions(ball, table, settings)) {
+                    events += PhysicsEvent(
+                        PhysicsEvent.Type.CUSHION_REBOUND,
+                        ball.id,
+                        position = ball.position
+                    )
+                }
+            }
+
+            for (i in balls.indices) {
+                for (j in i + 1 until balls.size) {
+
+                    val first = balls[i]
+                    val second = balls[j]
+
+                    if (first.pocketed || second.pocketed) continue
+
+                    if (resolveCollision(first, second, settings)) {
+                        events += PhysicsEvent(
+                            PhysicsEvent.Type.BALL_COLLISION,
+                            first.id,
+                            second.id,
+                            (first.position + second.position) * 0.5f
+                        )
+                    }
+                }
+            }
+        }
+
+        return events
+    }
+
+    private fun applyFriction(
+        ball: PhysicsBall,
+        settings: PhysicsSettings
+    ) {
+        val factor = settings.friction.coerceIn(0f, 1f)
+
+        ball.velocity = ball.velocity * factor
+
+        if (ball.velocity.length() < settings.stopSpeed) {
+            ball.velocity = PoolPoint(0f, 0f)
+        }
+    }
+
+    private fun handleCushions(
+        ball: PhysicsBall,
+        table: PoolTableBounds,
+        settings: PhysicsSettings
+    ): Boolean {
+
+        val left = table.left + ball.radius
+        val right = table.right - ball.radius
+        val top = table.top + ball.radius
+        val bottom = table.bottom - ball.radius
+
+        var bounced = false
+
+        if (ball.position.x < left) {
+            ball.position = PoolPoint(left, ball.position.y)
+            ball.velocity = PoolPoint(
+                abs(ball.velocity.x) * settings.cushionRestitution,
+                ball.velocity.y
+            )
+            bounced = true
+        } else if (ball.position.x > right) {
+            ball.position = PoolPoint(right, ball.position.y)
+            ball.velocity = PoolPoint(
+                -abs(ball.velocity.x) * settings.cushionRestitution,
+                ball.velocity.y
+            )
+            bounced = true
+        }
+
+        if (ball.position.y < top) {
+            ball.position = PoolPoint(ball.position.x, top)
+            ball.velocity = PoolPoint(
+                ball.velocity.x,
+                abs(ball.velocity.y) * settings.cushionRestitution
+            )
+            bounced = true
+        } else if (ball.position.y > bottom) {
+            ball.position = PoolPoint(ball.position.x, bottom)
+            ball.velocity = PoolPoint(
+                ball.velocity.x,
+                -abs(ball.velocity.y) * settings.cushionRestitution
+            )
+            bounced = true
+        }
+
+        return bounced
+    }
+
+    private fun resolveCollision(
+        first: PhysicsBall,
+        second: PhysicsBall,
+        settings: PhysicsSettings
+    ): Boolean {
+
+        val difference = second.position - first.position
+        val distance = difference.length()
+        val minimumDistance = first.radius + second.radius
+
+        if (distance >= minimumDistance || distance <= 0.000001f) {
+            return false
+        }
+
+        val normal = difference * (1f / distance)
+
+        val overlap = minimumDistance - distance
+        val correction = normal * (overlap * 0.5f)
+
+        first.position = first.position - correction
+        second.position = second.position + correction
+
+        val relativeVelocity = second.velocity - first.velocity
+        val velocityAlongNormal = relativeVelocity.dot(normal)
+
+        if (velocityAlongNormal > 0f) {
+            return true
+        }
+
+        val restitution = settings.restitution.coerceIn(0f, 1f)
+
+        val impulse =
+            -(1f + restitution) * velocityAlongNormal / 2f
+
+        val impulseVector = normal * impulse
+
+        first.velocity = first.velocity - impulseVector
+        second.velocity = second.velocity + impulseVector
+
+        return true
+    }
+
+    private fun isInsidePocket(
+        ball: PhysicsBall,
+        pockets: List<PoolPocket>
+    ): Boolean {
+
+        return pockets.any { pocket ->
+            ball.position.distanceTo(pocket.center) <=
+                pocket.captureRadius
+        }
+    }
+}
