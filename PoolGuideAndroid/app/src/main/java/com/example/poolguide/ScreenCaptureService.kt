@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -25,7 +26,10 @@ class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+
     private var firstFrameReceived = false
+    private var lastAnalysisTime = 0L
+    private var lastMessageTime = 0L
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
@@ -65,7 +69,7 @@ class ScreenCaptureService : Service() {
             mediaProjection = manager.getMediaProjection(resultCode, data)
 
             if (mediaProjection == null) {
-                showError("Android no ha iniciado MediaProjection")
+                showError("Android no ha iniciado la captura")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -84,18 +88,39 @@ class ScreenCaptureService : Service() {
                     val image = reader.acquireLatestImage()
 
                     if (image != null) {
-                        image.close()
+                        try {
+                            if (!firstFrameReceived) {
+                                firstFrameReceived = true
+                                createNotification("Captura funcionando")
+                            }
 
-                        if (!firstFrameReceived) {
-                            firstFrameReceived = true
-                            createNotification(
-                                "Captura funcionando: fotograma recibido"
-                            )
-                            Toast.makeText(
-                                this,
-                                "POOL GUIDE: captura funcionando",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            val now = System.currentTimeMillis()
+
+                            if (now - lastAnalysisTime >= 1000) {
+                                lastAnalysisTime = now
+
+                                val position = findWhiteBallCandidate(image)
+
+                                if (position != null &&
+                                    now - lastMessageTime >= 3000
+                                ) {
+                                    lastMessageTime = now
+
+                                    val message =
+                                        "Posible bola blanca: X ${position.first}, Y ${position.second}"
+
+                                    createNotification(message)
+
+                                    Toast.makeText(
+                                        this,
+                                        message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        } catch (_: Exception) {
+                        } finally {
+                            image.close()
                         }
                     }
                 },
@@ -126,15 +151,132 @@ class ScreenCaptureService : Service() {
                 showError("No se ha podido crear la pantalla virtual")
                 stopSelf()
             } else {
-                createNotification("Captura iniciada; esperando imagen")
+                createNotification("Captura iniciada; analizando imagen")
             }
 
         } catch (e: Exception) {
-            showError("Error de captura: ${e.message ?: e.javaClass.simpleName}")
+            showError("Error: ${e.message ?: e.javaClass.simpleName}")
             stopSelf()
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun findWhiteBallCandidate(image: Image): Pair<Int, Int>? {
+
+        val plane = image.planes[0]
+        val buffer = plane.buffer
+
+        val width = image.width
+        val height = image.height
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+
+        val step = 3
+        val gridWidth = (width + step - 1) / step
+        val gridHeight = (height + step - 1) / step
+
+        val mask = BooleanArray(gridWidth * gridHeight)
+
+        for (gy in 0 until gridHeight) {
+            val y = gy * step
+
+            for (gx in 0 until gridWidth) {
+                val x = gx * step
+                val index = y * rowStride + x * pixelStride
+
+                if (index + 2 >= buffer.limit()) continue
+
+                val red = buffer.get(index).toInt() and 0xFF
+                val green = buffer.get(index + 1).toInt() and 0xFF
+                val blue = buffer.get(index + 2).toInt() and 0xFF
+
+                val isWhite =
+                    red > 200 &&
+                    green > 200 &&
+                    blue > 200 &&
+                    kotlin.math.abs(red - green) < 40 &&
+                    kotlin.math.abs(green - blue) < 40
+
+                mask[gy * gridWidth + gx] = isWhite
+            }
+        }
+
+        val visited = BooleanArray(mask.size)
+        val queue = IntArray(mask.size)
+
+        for (start in mask.indices) {
+
+            if (!mask[start] || visited[start]) continue
+
+            var head = 0
+            var tail = 0
+
+            queue[tail++] = start
+            visited[start] = true
+
+            var count = 0
+            var minX = gridWidth
+            var maxX = 0
+            var minY = gridHeight
+            var maxY = 0
+            var sumX = 0
+            var sumY = 0
+
+            while (head < tail) {
+                val current = queue[head++]
+
+                val x = current % gridWidth
+                val y = current / gridWidth
+
+                count++
+                sumX += x
+                sumY += y
+
+                minX = minOf(minX, x)
+                maxX = maxOf(maxX, x)
+                minY = minOf(minY, y)
+                maxY = maxOf(maxY, y)
+
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
+                        if (dx == 0 && dy == 0) continue
+
+                        val nx = x + dx
+                        val ny = y + dy
+
+                        if (nx !in 0 until gridWidth ||
+                            ny !in 0 until gridHeight
+                        ) continue
+
+                        val next = ny * gridWidth + nx
+
+                        if (mask[next] && !visited[next]) {
+                            visited[next] = true
+                            queue[tail++] = next
+                        }
+                    }
+                }
+            }
+
+            val boxWidth = maxX - minX + 1
+            val boxHeight = maxY - minY + 1
+
+            if (count < 8 || count > 500) continue
+            if (boxWidth < 3 || boxHeight < 3) continue
+
+            val ratio = boxWidth.toFloat() / boxHeight.toFloat()
+            val fill = count.toFloat() / (boxWidth * boxHeight)
+
+            if (ratio in 0.65f..1.45f && fill > 0.45f) {
+                val centerX = (sumX / count) * step
+                val centerY = (sumY / count) * step
+
+                return Pair(centerX, centerY)
+            }
+        }
+
+        return null
     }
 
     private fun showError(message: String) {
