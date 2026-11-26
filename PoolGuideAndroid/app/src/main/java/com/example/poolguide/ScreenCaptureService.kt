@@ -20,6 +20,9 @@ import android.os.Handler
 import android.os.IBinder
 import android.view.Surface
 import android.view.WindowManager
+import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 
 class ScreenCaptureService : Service() {
 
@@ -107,6 +110,7 @@ class ScreenCaptureService : Service() {
                             val now = System.currentTimeMillis()
 
                             if (now - lastReport >= 3000) {
+
                                 val seconds =
                                     (now - lastReport) / 1000.0
 
@@ -114,13 +118,22 @@ class ScreenCaptureService : Service() {
                                 val brightness =
                                     measureBrightness(image)
 
-                                val whitePixels =
-                                    detectWhitePixels(image)
+                                val candidates =
+                                    detectWhiteGroups(image)
 
-                                val rotation = getScreenRotation()
+                                val rotation =
+                                    getScreenRotation()
 
-                                val message =
-                                    "Giro: $rotation | ${image.width}x${image.height}"
+                                val message = String.format(
+                                    Locale.US,
+                                    "%d° %dx%d F%.0f L%d C%d",
+                                    rotation,
+                                    image.width,
+                                    image.height,
+                                    fps,
+                                    brightness,
+                                    candidates
+                                )
 
                                 sendStatus(message)
 
@@ -128,7 +141,8 @@ class ScreenCaptureService : Service() {
                                 lastReport = now
                             }
 
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
+                            sendStatus("ERROR: ANALISIS")
                         } finally {
                             image.close()
                         }
@@ -160,7 +174,7 @@ class ScreenCaptureService : Service() {
                 )
 
             if (virtualDisplay == null) {
-                sendStatus("ERROR: pantalla virtual")
+                sendStatus("ERROR: PANTALLA VIRTUAL")
                 stopSelf()
             } else {
                 sendStatus("ESPERANDO IMAGEN")
@@ -223,44 +237,127 @@ class ScreenCaptureService : Service() {
         return if (samples > 0) total / samples else 0
     }
 
-    private fun detectWhitePixels(image: Image): Int {
+    private fun detectWhiteGroups(image: Image): Int {
+
         val plane = image.planes[0]
         val buffer = plane.buffer
+
         val width = image.width
         val height = image.height
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
 
-        var whiteCount = 0
+        val gridWidth = 180
+        val gridHeight = 180
 
-        val stepX = (width / 120).coerceAtLeast(1)
-        val stepY = (height / 120).coerceAtLeast(1)
+        val stepX = max(1, width / gridWidth)
+        val stepY = max(1, height / gridHeight)
 
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
+        val actualWidth = (width + stepX - 1) / stepX
+        val actualHeight = (height + stepY - 1) / stepY
+
+        val pixels = BooleanArray(actualWidth * actualHeight)
+        val visited = BooleanArray(actualWidth * actualHeight)
+
+        for (gy in 0 until actualHeight) {
+            for (gx in 0 until actualWidth) {
+
+                val x = min(width - 1, gx * stepX)
+                val y = min(height - 1, gy * stepY)
+
                 val index = y * rowStride + x * pixelStride
 
-                if (index + 2 < buffer.limit()) {
-                    val red = buffer.get(index).toInt() and 0xFF
-                    val green = buffer.get(index + 1).toInt() and 0xFF
-                    val blue = buffer.get(index + 2).toInt() and 0xFF
+                if (index + 2 >= buffer.limit()) continue
 
-                    if (red > 210 &&
-                        green > 210 &&
-                        blue > 210
-                    ) {
-                        whiteCount++
-                    }
-                }
+                val red = buffer.get(index).toInt() and 0xFF
+                val green = buffer.get(index + 1).toInt() and 0xFF
+                val blue = buffer.get(index + 2).toInt() and 0xFF
 
-                x += stepX
+                val brightest = max(red, max(green, blue))
+                val darkest = min(red, min(green, blue))
+
+                val isWhite =
+                    red > 205 &&
+                    green > 205 &&
+                    blue > 205 &&
+                    brightest - darkest < 55
+
+                pixels[gy * actualWidth + gx] = isWhite
             }
-            y += stepY
         }
 
-        return whiteCount
+        val queue = IntArray(pixels.size)
+        var groups = 0
+
+        for (start in pixels.indices) {
+
+            if (!pixels[start] || visited[start]) continue
+
+            var head = 0
+            var tail = 0
+
+            queue[tail++] = start
+            visited[start] = true
+
+            var count = 0
+            var minX = actualWidth
+            var maxX = 0
+            var minY = actualHeight
+            var maxY = 0
+
+            while (head < tail) {
+
+                val current = queue[head++]
+                val x = current % actualWidth
+                val y = current / actualWidth
+
+                count++
+
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                minY = min(minY, y)
+                maxY = max(maxY, y)
+
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
+
+                        if (dx == 0 && dy == 0) continue
+
+                        val nx = x + dx
+                        val ny = y + dy
+
+                        if (nx !in 0 until actualWidth) continue
+                        if (ny !in 0 until actualHeight) continue
+
+                        val next = ny * actualWidth + nx
+
+                        if (pixels[next] && !visited[next]) {
+                            visited[next] = true
+                            queue[tail++] = next
+                        }
+                    }
+                }
+            }
+
+            val boxWidth = maxX - minX + 1
+            val boxHeight = maxY - minY + 1
+
+            val ratio =
+                boxWidth.toFloat() / boxHeight.toFloat()
+
+            val compactness =
+                count.toFloat() / (boxWidth * boxHeight)
+
+            if (
+                count in 3..80 &&
+                ratio in 0.65f..1.45f &&
+                compactness > 0.25f
+            ) {
+                groups++
+            }
+        }
+
+        return groups
     }
 
     private fun sendStatus(message: String) {
