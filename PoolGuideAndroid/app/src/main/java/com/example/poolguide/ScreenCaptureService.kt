@@ -30,6 +30,7 @@ class ScreenCaptureService : Service() {
     private var firstFrameReceived = false
     private var lastAnalysisTime = 0L
     private var lastMessageTime = 0L
+    private var frameCount = 0
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
@@ -45,7 +46,7 @@ class ScreenCaptureService : Service() {
     ): Int {
 
         try {
-            createNotification("Preparando captura de pantalla")
+            createNotification("Preparando captura")
 
             val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
 
@@ -57,7 +58,7 @@ class ScreenCaptureService : Service() {
             }
 
             if (data == null) {
-                showError("No se han recibido los datos del permiso")
+                showError("No se recibieron los datos del permiso")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -89,9 +90,11 @@ class ScreenCaptureService : Service() {
 
                     if (image != null) {
                         try {
+                            frameCount++
+
                             if (!firstFrameReceived) {
                                 firstFrameReceived = true
-                                createNotification("Captura funcionando")
+                                showStatus("RECIBIENDO IMAGEN")
                             }
 
                             val now = System.currentTimeMillis()
@@ -106,18 +109,12 @@ class ScreenCaptureService : Service() {
                                 ) {
                                     lastMessageTime = now
 
-                                    val message =
-                                        "Posible bola blanca: X ${position.first}, Y ${position.second}"
-
-                                    createNotification(message)
-
-                                    Toast.makeText(
-                                        this,
-                                        message,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    showStatus(
+                                        "POSIBLE BOLA: X ${position.first}, Y ${position.second}"
+                                    )
                                 }
                             }
+
                         } catch (_: Exception) {
                         } finally {
                             image.close()
@@ -148,10 +145,10 @@ class ScreenCaptureService : Service() {
             )
 
             if (virtualDisplay == null) {
-                showError("No se ha podido crear la pantalla virtual")
+                showError("No se pudo crear la pantalla virtual")
                 stopSelf()
             } else {
-                createNotification("Captura iniciada; analizando imagen")
+                createNotification("Esperando primera imagen")
             }
 
         } catch (e: Exception) {
@@ -206,7 +203,6 @@ class ScreenCaptureService : Service() {
         val queue = IntArray(mask.size)
 
         for (start in mask.indices) {
-
             if (!mask[start] || visited[start]) continue
 
             var head = 0
@@ -225,7 +221,6 @@ class ScreenCaptureService : Service() {
 
             while (head < tail) {
                 val current = queue[head++]
-
                 val x = current % gridWidth
                 val y = current / gridWidth
 
@@ -269,27 +264,28 @@ class ScreenCaptureService : Service() {
             val fill = count.toFloat() / (boxWidth * boxHeight)
 
             if (ratio in 0.65f..1.45f && fill > 0.45f) {
-                val centerX = (sumX / count) * step
-                val centerY = (sumY / count) * step
-
-                return Pair(centerX, centerY)
+                return Pair(
+                    (sumX / count) * step,
+                    (sumY / count) * step
+                )
             }
         }
 
         return null
     }
 
-    private fun showError(message: String) {
+    private fun showStatus(message: String) {
+        createNotification(message)
+
         Toast.makeText(
             this,
             message,
             Toast.LENGTH_LONG
         ).show()
+    }
 
-        try {
-            createNotification(message)
-        } catch (_: Exception) {
-        }
+    private fun showError(message: String) {
+        showStatus(message)
     }
 
     private fun createNotification(message: String) {
@@ -336,3 +332,8 @@ class ScreenCaptureService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
+
+
+                    
+
+            
