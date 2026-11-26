@@ -109,14 +109,8 @@ class ScreenCaptureService : Service() {
                                 val whitePixels =
                                     detectWhitePixels(image)
 
-                                val state = if (brightness < 15) {
-                                    "IMAGEN OSCURA"
-                                } else {
-                                    "IMAGEN VISIBLE"
-                                }
-
                                 val message =
-                                    "FPS: ${"%.1f".format(fps)} | Luz: $brightness | Blancos: $whitePixels"
+                                    "FPS: ${"%.1f".format(fps)} | Luz: $brightness | Blancos: $whitePixels | ${image.width}x${image.height}"
 
                                 sendStatus(message)
 
@@ -210,7 +204,6 @@ class ScreenCaptureService : Service() {
 
         var whiteCount = 0
 
-        // Muestreo de la imagen para localizar zonas claras.
         val stepX = (width / 120).coerceAtLeast(1)
         val stepY = (height / 120).coerceAtLeast(1)
 
