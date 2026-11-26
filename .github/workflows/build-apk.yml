@@ -42,6 +42,7 @@ jobs:
           mkdir -p source/PoolGuideAndroid/app/src/main/java/com/example/poolguide
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt
+          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/GuideOverlayView.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/GuideOverlayView.kt
           cp PoolGuideAndroid/app/src/main/AndroidManifest.xml source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
 
       - name: Corregir compatibilidad Java
