@@ -18,6 +18,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
+import android.view.Surface
+import android.view.WindowManager
 
 class ScreenCaptureService : Service() {
 
@@ -32,8 +34,10 @@ class ScreenCaptureService : Service() {
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "capture_data"
+
         private const val CHANNEL_ID = "pool_guide_capture"
         private const val NOTIFICATION_ID = 2
+
         const val ACTION_CAPTURE_STATUS =
             "com.example.poolguide.CAPTURE_STATUS"
     }
@@ -50,7 +54,10 @@ class ScreenCaptureService : Service() {
                 intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
 
             val data: Intent? = if (Build.VERSION.SDK_INT >= 33) {
-                intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
+                intent?.getParcelableExtra(
+                    EXTRA_DATA,
+                    Intent::class.java
+                )
             } else {
                 @Suppress("DEPRECATION")
                 intent?.getParcelableExtra(EXTRA_DATA)
@@ -66,7 +73,8 @@ class ScreenCaptureService : Service() {
                 Context.MEDIA_PROJECTION_SERVICE
             ) as MediaProjectionManager
 
-            mediaProjection = manager.getMediaProjection(resultCode, data)
+            mediaProjection =
+                manager.getMediaProjection(resultCode, data)
 
             if (mediaProjection == null) {
                 sendStatus("ERROR: captura no iniciada")
@@ -101,16 +109,18 @@ class ScreenCaptureService : Service() {
                             if (now - lastReport >= 3000) {
                                 val seconds =
                                     (now - lastReport) / 1000.0
-                                val fps = frames / seconds
 
+                                val fps = frames / seconds
                                 val brightness =
                                     measureBrightness(image)
 
                                 val whitePixels =
                                     detectWhitePixels(image)
 
+                                val rotation = getScreenRotation()
+
                                 val message =
-                                    "FPS: ${"%.1f".format(fps)} | Luz: $brightness | Blancos: $whitePixels | ${image.width}x${image.height}"
+                                    "Giro: $rotation | ${image.width}x${image.height}"
 
                                 sendStatus(message)
 
@@ -137,16 +147,17 @@ class ScreenCaptureService : Service() {
                 Handler(mainLooper)
             )
 
-            virtualDisplay = mediaProjection?.createVirtualDisplay(
-                "PoolGuideCapture",
-                metrics.widthPixels,
-                metrics.heightPixels,
-                metrics.densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader?.surface,
-                null,
-                null
-            )
+            virtualDisplay =
+                mediaProjection?.createVirtualDisplay(
+                    "PoolGuideCapture",
+                    metrics.widthPixels,
+                    metrics.heightPixels,
+                    metrics.densityDpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    imageReader?.surface,
+                    null,
+                    null
+                )
 
             if (virtualDisplay == null) {
                 sendStatus("ERROR: pantalla virtual")
@@ -156,11 +167,29 @@ class ScreenCaptureService : Service() {
             }
 
         } catch (e: Exception) {
-            sendStatus("ERROR: ${e.message ?: e.javaClass.simpleName}")
+            sendStatus(
+                "ERROR: ${e.message ?: e.javaClass.simpleName}"
+            )
             stopSelf()
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun getScreenRotation(): Int {
+        @Suppress("DEPRECATION")
+        val display = (
+            getSystemService(Context.WINDOW_SERVICE)
+                as WindowManager
+        ).defaultDisplay
+
+        return when (display.rotation) {
+            Surface.ROTATION_0 -> 0
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> -1
+        }
     }
 
     private fun measureBrightness(image: Image): Int {
