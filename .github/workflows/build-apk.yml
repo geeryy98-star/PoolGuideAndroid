@@ -42,6 +42,7 @@ jobs:
           mkdir -p source/PoolGuideAndroid/app/src/main/java/com/example/poolguide
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt
+          cp PoolGuideAndroid/app/src/main/AndroidManifest.xml source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
 
       - name: Corregir compatibilidad Java
         run: |
@@ -54,11 +55,6 @@ jobs:
               }
           }
           EOF
-
-      - name: Comprobar configuración
-        run: |
-          find source/PoolGuideAndroid -name 'build.gradle*' -type f -print
-          grep -RniE 'sourceCompatibility|targetCompatibility|jvmTarget' source/PoolGuideAndroid --include='*.gradle' --include='*.gradle.kts' || true
 
       - name: Compilar APK
         run: |
