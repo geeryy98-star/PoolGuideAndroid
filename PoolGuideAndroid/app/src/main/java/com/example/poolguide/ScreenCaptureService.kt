@@ -27,10 +27,8 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
 
-    private var firstFrameReceived = false
-    private var lastAnalysisTime = 0L
-    private var lastMessageTime = 0L
-    private var frameCount = 0
+    private var frames = 0
+    private var lastReport = System.currentTimeMillis()
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
@@ -48,7 +46,8 @@ class ScreenCaptureService : Service() {
         try {
             createNotification("Preparando captura")
 
-            val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+            val resultCode =
+                intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
 
             val data: Intent? = if (Build.VERSION.SDK_INT >= 33) {
                 intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
@@ -70,7 +69,7 @@ class ScreenCaptureService : Service() {
             mediaProjection = manager.getMediaProjection(resultCode, data)
 
             if (mediaProjection == null) {
-                showError("Android no ha iniciado la captura")
+                showError("No se pudo iniciar MediaProjection")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -81,7 +80,7 @@ class ScreenCaptureService : Service() {
                 metrics.widthPixels,
                 metrics.heightPixels,
                 PixelFormat.RGBA_8888,
-                2
+                3
             )
 
             imageReader?.setOnImageAvailableListener(
@@ -90,29 +89,36 @@ class ScreenCaptureService : Service() {
 
                     if (image != null) {
                         try {
-                            frameCount++
-
-                            if (!firstFrameReceived) {
-                                firstFrameReceived = true
-                                showStatus("RECIBIENDO IMAGEN")
-                            }
+                            frames++
 
                             val now = System.currentTimeMillis()
 
-                            if (now - lastAnalysisTime >= 1000) {
-                                lastAnalysisTime = now
+                            if (now - lastReport >= 3000) {
+                                val seconds =
+                                    (now - lastReport) / 1000.0
 
-                                val position = findWhiteBallCandidate(image)
+                                val fps = frames / seconds
+                                val brightness = measureBrightness(image)
 
-                                if (position != null &&
-                                    now - lastMessageTime >= 3000
-                                ) {
-                                    lastMessageTime = now
-
-                                    showStatus(
-                                        "POSIBLE BOLA: X ${position.first}, Y ${position.second}"
-                                    )
+                                val state = if (brightness < 15) {
+                                    "IMAGEN MUY OSCURA"
+                                } else {
+                                    "IMAGEN VISIBLE"
                                 }
+
+                                val message =
+                                    "FPS: ${"%.1f".format(fps)} | $state | Luz: $brightness"
+
+                                createNotification(message)
+
+                                Toast.makeText(
+                                    this,
+                                    message,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                frames = 0
+                                lastReport = now
                             }
 
                         } catch (_: Exception) {
@@ -148,7 +154,7 @@ class ScreenCaptureService : Service() {
                 showError("No se pudo crear la pantalla virtual")
                 stopSelf()
             } else {
-                createNotification("Esperando primera imagen")
+                createNotification("Esperando imágenes")
             }
 
         } catch (e: Exception) {
@@ -159,7 +165,7 @@ class ScreenCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun findWhiteBallCandidate(image: Image): Pair<Int, Int>? {
+    private fun measureBrightness(image: Image): Int {
 
         val plane = image.planes[0]
         val buffer = plane.buffer
@@ -169,17 +175,15 @@ class ScreenCaptureService : Service() {
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
 
-        val step = 3
-        val gridWidth = (width + step - 1) / step
-        val gridHeight = (height + step - 1) / step
+        var total = 0
+        var samples = 0
 
-        val mask = BooleanArray(gridWidth * gridHeight)
+        for (gy in 1..10) {
+            for (gx in 1..10) {
 
-        for (gy in 0 until gridHeight) {
-            val y = gy * step
+                val x = width * gx / 11
+                val y = height * gy / 11
 
-            for (gx in 0 until gridWidth) {
-                val x = gx * step
                 val index = y * rowStride + x * pixelStride
 
                 if (index + 2 >= buffer.limit()) continue
@@ -188,107 +192,29 @@ class ScreenCaptureService : Service() {
                 val green = buffer.get(index + 1).toInt() and 0xFF
                 val blue = buffer.get(index + 2).toInt() and 0xFF
 
-                val isWhite =
-                    red > 200 &&
-                    green > 200 &&
-                    blue > 200 &&
-                    kotlin.math.abs(red - green) < 40 &&
-                    kotlin.math.abs(green - blue) < 40
-
-                mask[gy * gridWidth + gx] = isWhite
+                total += (red + green + blue) / 3
+                samples++
             }
         }
 
-        val visited = BooleanArray(mask.size)
-        val queue = IntArray(mask.size)
-
-        for (start in mask.indices) {
-            if (!mask[start] || visited[start]) continue
-
-            var head = 0
-            var tail = 0
-
-            queue[tail++] = start
-            visited[start] = true
-
-            var count = 0
-            var minX = gridWidth
-            var maxX = 0
-            var minY = gridHeight
-            var maxY = 0
-            var sumX = 0
-            var sumY = 0
-
-            while (head < tail) {
-                val current = queue[head++]
-                val x = current % gridWidth
-                val y = current / gridWidth
-
-                count++
-                sumX += x
-                sumY += y
-
-                minX = minOf(minX, x)
-                maxX = maxOf(maxX, x)
-                minY = minOf(minY, y)
-                maxY = maxOf(maxY, y)
-
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        if (dx == 0 && dy == 0) continue
-
-                        val nx = x + dx
-                        val ny = y + dy
-
-                        if (nx !in 0 until gridWidth ||
-                            ny !in 0 until gridHeight
-                        ) continue
-
-                        val next = ny * gridWidth + nx
-
-                        if (mask[next] && !visited[next]) {
-                            visited[next] = true
-                            queue[tail++] = next
-                        }
-                    }
-                }
-            }
-
-            val boxWidth = maxX - minX + 1
-            val boxHeight = maxY - minY + 1
-
-            if (count < 8 || count > 500) continue
-            if (boxWidth < 3 || boxHeight < 3) continue
-
-            val ratio = boxWidth.toFloat() / boxHeight.toFloat()
-            val fill = count.toFloat() / (boxWidth * boxHeight)
-
-            if (ratio in 0.65f..1.45f && fill > 0.45f) {
-                return Pair(
-                    (sumX / count) * step,
-                    (sumY / count) * step
-                )
-            }
-        }
-
-        return null
+        return if (samples > 0) total / samples else 0
     }
 
-    private fun showStatus(message: String) {
-        createNotification(message)
-
+    private fun showError(message: String) {
         Toast.makeText(
             this,
             message,
             Toast.LENGTH_LONG
         ).show()
-    }
 
-    private fun showError(message: String) {
-        showStatus(message)
+        try {
+            createNotification(message)
+        } catch (_: Exception) {
+        }
     }
 
     private fun createNotification(message: String) {
+
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -332,8 +258,3 @@ class ScreenCaptureService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
-
-
-                    
-
-            
