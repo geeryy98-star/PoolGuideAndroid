@@ -32,10 +32,8 @@ class ScreenCaptureService : Service() {
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "capture_data"
-
         private const val CHANNEL_ID = "pool_guide_capture"
         private const val NOTIFICATION_ID = 2
-
         const val ACTION_CAPTURE_STATUS =
             "com.example.poolguide.CAPTURE_STATUS"
     }
@@ -45,7 +43,6 @@ class ScreenCaptureService : Service() {
         flags: Int,
         startId: Int
     ): Int {
-
         try {
             createNotification("Preparando captura")
 
@@ -60,7 +57,7 @@ class ScreenCaptureService : Service() {
             }
 
             if (data == null) {
-                sendStatus("ERROR: falta permiso de captura")
+                sendStatus("ERROR: falta permiso")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -102,12 +99,15 @@ class ScreenCaptureService : Service() {
                             val now = System.currentTimeMillis()
 
                             if (now - lastReport >= 3000) {
-
                                 val seconds =
                                     (now - lastReport) / 1000.0
-
                                 val fps = frames / seconds
-                                val brightness = measureBrightness(image)
+
+                                val brightness =
+                                    measureBrightness(image)
+
+                                val whitePixels =
+                                    detectWhitePixels(image)
 
                                 val state = if (brightness < 15) {
                                     "IMAGEN OSCURA"
@@ -116,7 +116,7 @@ class ScreenCaptureService : Service() {
                                 }
 
                                 val message =
-                                    "FPS: ${"%.1f".format(fps)} | $state | Luz: $brightness"
+                                    "FPS: ${"%.1f".format(fps)} | Luz: $brightness | Blancos: $whitePixels"
 
                                 sendStatus(message)
 
@@ -162,9 +162,7 @@ class ScreenCaptureService : Service() {
             }
 
         } catch (e: Exception) {
-            sendStatus(
-                "ERROR: ${e.message ?: e.javaClass.simpleName}"
-            )
+            sendStatus("ERROR: ${e.message ?: e.javaClass.simpleName}")
             stopSelf()
         }
 
@@ -172,10 +170,8 @@ class ScreenCaptureService : Service() {
     }
 
     private fun measureBrightness(image: Image): Int {
-
         val plane = image.planes[0]
         val buffer = plane.buffer
-
         val width = image.width
         val height = image.height
         val rowStride = plane.rowStride
@@ -186,10 +182,8 @@ class ScreenCaptureService : Service() {
 
         for (gy in 1..10) {
             for (gx in 1..10) {
-
                 val x = width * gx / 11
                 val y = height * gy / 11
-
                 val index = y * rowStride + x * pixelStride
 
                 if (index + 2 >= buffer.limit()) continue
@@ -206,8 +200,48 @@ class ScreenCaptureService : Service() {
         return if (samples > 0) total / samples else 0
     }
 
-    private fun sendStatus(message: String) {
+    private fun detectWhitePixels(image: Image): Int {
+        val plane = image.planes[0]
+        val buffer = plane.buffer
+        val width = image.width
+        val height = image.height
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
 
+        var whiteCount = 0
+
+        // Muestreo de la imagen para localizar zonas claras.
+        val stepX = (width / 120).coerceAtLeast(1)
+        val stepY = (height / 120).coerceAtLeast(1)
+
+        var y = 0
+        while (y < height) {
+            var x = 0
+            while (x < width) {
+                val index = y * rowStride + x * pixelStride
+
+                if (index + 2 < buffer.limit()) {
+                    val red = buffer.get(index).toInt() and 0xFF
+                    val green = buffer.get(index + 1).toInt() and 0xFF
+                    val blue = buffer.get(index + 2).toInt() and 0xFF
+
+                    if (red > 210 &&
+                        green > 210 &&
+                        blue > 210
+                    ) {
+                        whiteCount++
+                    }
+                }
+
+                x += stepX
+            }
+            y += stepY
+        }
+
+        return whiteCount
+    }
+
+    private fun sendStatus(message: String) {
         createNotification(message)
 
         val broadcast = Intent(ACTION_CAPTURE_STATUS).apply {
@@ -219,7 +253,6 @@ class ScreenCaptureService : Service() {
     }
 
     private fun createNotification(message: String) {
-
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
