@@ -1,6 +1,7 @@
 
 package com.example.poolguide
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -44,7 +45,9 @@ object PoolPhysics {
         settings: PhysicsSettings = PhysicsSettings()
     ): List<PhysicsEvent> {
 
-        if (deltaTime <= 0f) return emptyList()
+        if (deltaTime <= 0f || balls.isEmpty()) {
+            return emptyList()
+        }
 
         val events = mutableListOf<PhysicsEvent>()
 
@@ -70,7 +73,6 @@ object PoolPhysics {
                         ball.id,
                         position = ball.position
                     )
-
                     continue
                 }
 
@@ -131,18 +133,19 @@ object PoolPhysics {
         val bottom = table.bottom - ball.radius
 
         var bounced = false
+        val restitution = settings.cushionRestitution.coerceIn(0f, 1f)
 
         if (ball.position.x < left) {
             ball.position = PoolPoint(left, ball.position.y)
             ball.velocity = PoolPoint(
-                abs(ball.velocity.x) * settings.cushionRestitution,
+                abs(ball.velocity.x) * restitution,
                 ball.velocity.y
             )
             bounced = true
         } else if (ball.position.x > right) {
             ball.position = PoolPoint(right, ball.position.y)
             ball.velocity = PoolPoint(
-                -abs(ball.velocity.x) * settings.cushionRestitution,
+                -abs(ball.velocity.x) * restitution,
                 ball.velocity.y
             )
             bounced = true
@@ -152,14 +155,14 @@ object PoolPhysics {
             ball.position = PoolPoint(ball.position.x, top)
             ball.velocity = PoolPoint(
                 ball.velocity.x,
-                abs(ball.velocity.y) * settings.cushionRestitution
+                abs(ball.velocity.y) * restitution
             )
             bounced = true
         } else if (ball.position.y > bottom) {
             ball.position = PoolPoint(ball.position.x, bottom)
             ball.velocity = PoolPoint(
                 ball.velocity.x,
-                -abs(ball.velocity.y) * settings.cushionRestitution
+                -abs(ball.velocity.y) * restitution
             )
             bounced = true
         }
@@ -192,8 +195,8 @@ object PoolPhysics {
         val relativeVelocity = second.velocity - first.velocity
         val velocityAlongNormal = relativeVelocity.dot(normal)
 
-        if (velocityAlongNormal > 0f) {
-            return true
+        if (velocityAlongNormal >= 0f) {
+            return false
         }
 
         val restitution = settings.restitution.coerceIn(0f, 1f)
