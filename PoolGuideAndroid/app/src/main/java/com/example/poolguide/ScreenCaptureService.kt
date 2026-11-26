@@ -15,19 +15,34 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
-import android.util.DisplayMetrics
+import android.os.Looper
 
 class ScreenCaptureService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    private var firstFrameReceived = false
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        createNotification()
+    companion object {
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_DATA = "capture_data"
+        private const val CHANNEL_ID = "pool_guide_capture"
+        private const val NOTIFICATION_ID = 2
+    }
+
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+
+        createNotification("Preparando captura de pantalla")
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+
         val data = if (Build.VERSION.SDK_INT >= 33) {
             intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
         } else {
@@ -41,21 +56,40 @@ class ScreenCaptureService : Service() {
         }
 
         try {
-            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
-                    as MediaProjectionManager
+            val manager = getSystemService(
+                Context.MEDIA_PROJECTION_SERVICE
+            ) as MediaProjectionManager
 
             mediaProjection = manager.getMediaProjection(resultCode, data)
 
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            (getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
-                .defaultDisplay.getRealMetrics(metrics)
+            val metrics = resources.displayMetrics
+            val width = metrics.widthPixels
+            val height = metrics.heightPixels
+            val density = metrics.densityDpi
 
             imageReader = ImageReader.newInstance(
-                metrics.widthPixels,
-                metrics.heightPixels,
+                width,
+                height,
                 PixelFormat.RGBA_8888,
                 2
+            )
+
+            imageReader?.setOnImageAvailableListener(
+                { reader ->
+                    val image = reader.acquireLatestImage()
+
+                    if (image != null) {
+                        image.close()
+
+                        if (!firstFrameReceived) {
+                            firstFrameReceived = true
+                            createNotification(
+                                "Captura funcionando: primer fotograma recibido"
+                            )
+                        }
+                    }
+                },
+                Handler(Looper.getMainLooper())
             )
 
             mediaProjection?.registerCallback(
@@ -64,19 +98,23 @@ class ScreenCaptureService : Service() {
                         stopSelf()
                     }
                 },
-                null
+                Handler(Looper.getMainLooper())
             )
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "PoolGuideCapture",
-                metrics.widthPixels,
-                metrics.heightPixels,
-                metrics.densityDpi,
+                width,
+                height,
+                density,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader?.surface,
                 null,
                 null
             )
+
+            if (virtualDisplay == null) {
+                stopSelf()
+            }
 
         } catch (_: Exception) {
             stopSelf()
@@ -85,38 +123,38 @@ class ScreenCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun createNotification() {
-        val channelId = "pool_guide_capture"
-
+    private fun createNotification(message: String) {
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 "Captura Pool Guide",
                 NotificationManager.IMPORTANCE_LOW
             )
+
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
         }
 
-        val notification = Notification.Builder(this, channelId)
+        val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Pool Guide")
-            .setContentText("Captura de pantalla activa")
+            .setContentText(message)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()
 
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(
-                2,
+                NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             )
         } else {
-            startForeground(2, notification)
+            startForeground(NOTIFICATION_ID, notification)
         }
     }
 
     override fun onDestroy() {
         virtualDisplay?.release()
+        imageReader?.setOnImageAvailableListener(null, null)
         imageReader?.close()
         mediaProjection?.stop()
 
@@ -128,9 +166,4 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    companion object {
-        const val EXTRA_RESULT_CODE = "result_code"
-        const val EXTRA_DATA = "capture_data"
-    }
 }
