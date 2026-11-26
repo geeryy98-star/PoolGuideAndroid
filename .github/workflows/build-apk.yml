@@ -56,7 +56,7 @@ jobs:
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/TableDetector.kt "$DEST/"
 
           cp BallDetector.kt "$DEST/"
-          cp CalculadoraTrayectoria.kt "$DEST/"
+          cp CalculadoraDeTrayectoria.kt "$DEST/"
 
           cp PoolGuideAndroid/app/src/main/AndroidManifest.xml source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
 
@@ -66,7 +66,7 @@ jobs:
           echo "Archivos Kotlin incorporados:"
           ls -la "$DEST"
           test -f "$DEST/BallDetector.kt"
-          test -f "$DEST/CalculadoraTrayectoria.kt"
+          test -f "$DEST/CalculadoraDeTrayectoria.kt"
           test -f "$DEST/PoolAnalysisEngine.kt"
           test -f "$DEST/PoolPhysics.kt"
           test -f "$DEST/TableDetector.kt"
