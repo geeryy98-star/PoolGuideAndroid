@@ -37,9 +37,11 @@ jobs:
           mkdir source
           unzip *.zip -d source
 
-      - name: Aplicar nuevo MainActivity
+      - name: Aplicar archivos actualizados
         run: |
+          mkdir -p source/PoolGuideAndroid/app/src/main/java/com/example/poolguide
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt
+          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt source/PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt
 
       - name: Corregir compatibilidad Java
         run: |
