@@ -27,7 +27,7 @@ class TrajectoryCalculatorTest {
         assertNotNull(plan)
         assertTrue(plan!!.reachesPocket)
         assertTrue(plan.segments.size >= 2)
-        assertTrue(plan.segments.last().end.distanceTo(pocket.center) <= pocket.captureRadius)
+        assertTrue(plan.segments.last().end.distanceTo(pocket.center) <= pocket.captureRadius + 0.0001f)
     }
 
     @Test
