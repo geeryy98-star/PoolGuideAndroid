@@ -24,6 +24,22 @@ class TrajectoryOverlayView(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
     }
     private var lines = floatArrayOf()
+    private var ballMarkers = floatArrayOf()
+    private var cueIndex = -1
+    private val ballPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.CYAN
+        strokeWidth = 3.5f
+        style = Paint.Style.STROKE
+    }
+    private val cueMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.GREEN
+        strokeWidth = 5f
+        style = Paint.Style.STROKE
+    }
+    private val centerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
     private var enabled = true
     private var sourceWidth = 0
     private var sourceHeight = 0
@@ -36,6 +52,8 @@ class TrajectoryOverlayView(context: Context) : View(context) {
                 lines = intent?.getFloatArrayExtra("lines") ?: floatArrayOf()
                 sourceWidth = intent?.getIntExtra("screen_width", 0) ?: 0
                 sourceHeight = intent?.getIntExtra("screen_height", 0) ?: 0
+                ballMarkers = intent?.getFloatArrayExtra("ball_markers") ?: floatArrayOf()
+                cueIndex = intent?.getIntExtra("cue_index", -1) ?: -1
             }
             invalidate()
         }
@@ -54,9 +72,22 @@ class TrajectoryOverlayView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!enabled || sourceWidth <= 0 || sourceHeight <= 0 || lines.size < 4) return
+        if (!enabled || sourceWidth <= 0 || sourceHeight <= 0) return
         val sx = width.toFloat() / sourceWidth
         val sy = height.toFloat() / sourceHeight
+        val radiusScale = (sx + sy) * 0.5f
+        var marker = 0
+        while (marker + 2 < ballMarkers.size) {
+            val ballIndex = marker / 3
+            val x = ballMarkers[marker] * sx
+            val y = ballMarkers[marker + 1] * sy
+            val radius = (ballMarkers[marker + 2] * radiusScale).coerceAtLeast(5f)
+            val paint = if (ballIndex == cueIndex) cueMarkerPaint else ballPaint
+            canvas.drawCircle(x, y, radius, paint)
+            canvas.drawCircle(x, y, 2.5f, centerPaint)
+            marker += 3
+        }
+        if (lines.size < 4) return
         var index = 0
         var segment = 0
         while (index + 3 < lines.size) {
