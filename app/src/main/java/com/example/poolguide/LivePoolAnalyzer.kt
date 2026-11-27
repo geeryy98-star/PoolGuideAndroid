@@ -43,7 +43,7 @@ object LivePoolAnalyzer {
         val fullBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         fullBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
-        val maxDimension = 900
+        val maxDimension = 640
         val scale = minOf(1f, maxDimension.toFloat() / max(width, height))
         val scaledWidth = max(1, (width * scale).toInt())
         val scaledHeight = max(1, (height * scale).toInt())
