@@ -33,7 +33,7 @@ class ScreenCaptureService : Service() {
     private var analysisThread: HandlerThread? = null
 
     private var frames = 0
-    private var lastReport = System.currentTimeMillis()
+    private var lastReport = 0L
     private var firstFrame = false
     private var foregroundStarted = false
     @Volatile private var stopping = false
@@ -115,13 +115,13 @@ class ScreenCaptureService : Service() {
 
                             val now = System.currentTimeMillis()
 
-                            if (now - lastReport >= 3000) {
+                            if (now - lastReport >= 1000) {
 
                                 val seconds =
                                     (now - lastReport) / 1000.0
 
                                 val fps = frames / seconds
-                                val analysis = LivePoolAnalyzer.analyze(image)
+                                val analysis = LivePoolAnalyzer.analyze(image, TableCalibration.load(this@ScreenCaptureService))
                                 sendStatus(analysis.message)
                                 sendGuideLines(
                                     analysis.screenLines,
