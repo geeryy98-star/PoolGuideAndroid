@@ -137,6 +137,7 @@ class ScreenCaptureService : Service() {
 
                         } catch (e: Exception) {
                             sendStatus("ERROR: ANALISIS")
+                            sendGuideLines(floatArrayOf(), image.width, image.height, floatArrayOf(), -1)
                         } finally {
                             image.close()
                         }
@@ -412,6 +413,7 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         stopping = true
+        sendGuideLines(floatArrayOf(), 0, 0, floatArrayOf(), -1)
         virtualDisplay?.release()
         imageReader?.setOnImageAvailableListener(null, null)
         imageReader?.close()
