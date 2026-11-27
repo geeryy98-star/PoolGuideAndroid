@@ -43,8 +43,8 @@ object PoolAnalysisEngine {
             return emptyResult("Limites de mesa incorrectos")
         }
 
-        if (pocketCentersPx.size != 6) {
-            return emptyResult("Se necesitan las 6 troneras")
+        if (pocketCentersPx.size < 4) {
+            return emptyResult("No hay suficientes troneras confirmadas")
         }
 
         val detected = preDetectedBalls ?: BallDetector.detect(
