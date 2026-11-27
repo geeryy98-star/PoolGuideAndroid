@@ -21,7 +21,7 @@ data class DetectedBall(
 
 object BallDetector {
 
-    private const val MIN_CONFIDENCE = 0.42f
+    private const val MIN_CONFIDENCE = 0.34f
     private const val EDGE_THRESHOLD = 65f
     private const val CIRCLE_SAMPLES = 32
 
@@ -98,12 +98,12 @@ object BallDetector {
 
         val minRadius = max(
             3,
-            (estimatedRadius * 0.72f).roundToInt()
+            (estimatedRadius * 0.58f).roundToInt()
         )
 
         val maxRadius = max(
             minRadius + 1,
-            (estimatedRadius * 1.30f).roundToInt()
+            (estimatedRadius * 1.55f).roundToInt()
         )
 
         val radiusStep = max(
@@ -147,9 +147,11 @@ object BallDetector {
                     val contrast = circleContrast(
                         pixels, width, height, cx, cy, radius
                     )
-                    val confidence = score * (0.35f + 0.65f * contrast)
-                    if (score >= MIN_CONFIDENCE && contrast >= 0.25f &&
-                        confidence >= MIN_CONFIDENCE) {
+                    val confidence = score * (0.65f + 0.35f * contrast)
+                    // Do not make colour contrast a hard gate: compressed game
+                    // frames, highlights and striped balls can have weak centre/rim
+                    // contrast even when the circular edge is genuine.
+                    if (score >= MIN_CONFIDENCE && confidence >= MIN_CONFIDENCE) {
                         candidates.add(
                             DetectedBall(
                                 centerX = left + cx.toFloat(),
