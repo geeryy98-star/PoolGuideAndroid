@@ -224,9 +224,30 @@ object BallDetector {
 
             val index = y * width + x
 
-            if (edges[index] >= EDGE_THRESHOLD) {
-                hits++
+            // The rasterized ball rim may fall one pixel away from the
+            // ideal circle because of antialiasing and perspective. Sample a
+            // small cross around each circumference point instead of requiring
+            // an exact-pixel hit.
+            var edgeFound = false
+            for (offset in -1..1) {
+                val horizontal = centerY + (sin(angle) * radius).roundToInt()
+                val vertical = centerX + (cos(angle) * radius).roundToInt()
+                val x = when (offset) {
+                    -1 -> vertical - 1
+                    1 -> vertical + 1
+                    else -> vertical
+                }
+                val y = when (offset) {
+                    -1 -> horizontal - 1
+                    1 -> horizontal + 1
+                    else -> horizontal
+                }
+                if (edges[y * width + x] >= EDGE_THRESHOLD) {
+                    edgeFound = true
+                    break
+                }
             }
+            if (edgeFound) hits++
         }
 
         return hits.toFloat() / angles.size
