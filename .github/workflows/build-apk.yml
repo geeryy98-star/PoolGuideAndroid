@@ -1,8 +1,13 @@
-
 name: Build Pool Guide APK
 
 on:
+  push:
+    branches:
+      - fix/poolguide-integration
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -10,87 +15,50 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Descargar proyecto
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Preparar Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Instalar Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Descomprimir proyecto
+      - name: Verify standalone project
         run: |
           set -e
-          mkdir -p source
-          unzip PoolGuideAndroid-prototype-0.1.zip -d source
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/com/example/poolguide/MainActivity.kt
+          test -f app/src/main/java/com/example/poolguide/ScreenCaptureService.kt
+          test -f app/src/main/java/com/example/poolguide/FloatingOverlayService.kt
+          test -f app/src/main/java/com/example/poolguide/GuideOverlayView.kt
+          test -f app/src/main/java/com/example/poolguide/BallDetector.kt
+          test -f app/src/main/java/com/example/poolguide/TableDetector.kt
+          test -f app/src/main/java/com/example/poolguide/TrajectoryCalculator.kt
+          test -f app/src/main/java/com/example/poolguide/PoolPhysics.kt
+          test -f app/src/main/java/com/example/poolguide/PoolAnalysisEngine.kt
 
-      - name: Preparar carpeta de codigo
-        run: |
-          mkdir -p source/PoolGuideAndroid/app/src/main/java/com/example/poolguide
+      - name: Compile debug APK
+        run: gradle --no-daemon assembleDebug
 
-      - name: Copiar archivos principales
-        run: |
-          set -e
-          DEST="source/PoolGuideAndroid/app/src/main/java/com/example/poolguide"
-
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/MainActivity.kt "$DEST/"
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/ScreenCaptureService.kt "$DEST/"
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/GuideOverlayView.kt "$DEST/"
-
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/PoolAnalysisEngine.kt "$DEST/"
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/PoolPhysics.kt "$DEST/"
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/TableDetector.kt "$DEST/"
-
-          cp BallDetector.kt "$DEST/"
-          cp CalculadoraDeTrayectoria.kt "$DEST/"
-
-          cp PoolGuideAndroid/app/src/main/AndroidManifest.xml source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
-
-      - name: Comprobar archivos incorporados
-        run: |
-          DEST="source/PoolGuideAndroid/app/src/main/java/com/example/poolguide"
-          echo "Archivos Kotlin incorporados:"
-          ls -la "$DEST"
-          test -f "$DEST/BallDetector.kt"
-          test -f "$DEST/CalculadoraDeTrayectoria.kt"
-          test -f "$DEST/PoolAnalysisEngine.kt"
-          test -f "$DEST/PoolPhysics.kt"
-          test -f "$DEST/TableDetector.kt"
-
-      - name: Corregir compatibilidad Java
-        run: |
-          cat >> source/PoolGuideAndroid/app/build.gradle <<'EOF'
-
-          android {
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          EOF
-
-      - name: Compilar APK
-        run: |
-          cd source/PoolGuideAndroid
-          gradle assembleDebug
-
-      - name: Guardar APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PoolGuide-APK
-          path: source/PoolGuideAndroid/app/build/outputs/apk/debug/*.apk
-          
+          name: PoolGuide-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
