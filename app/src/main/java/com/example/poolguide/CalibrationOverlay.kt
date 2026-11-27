@@ -62,12 +62,13 @@ class CalibrationOverlay(
         val label = if (taps.size < labels.size) labels[taps.size] else "Calibración completada"
         canvas.drawRoundRect(24f, 24f, width - 24f, 112f, 14f, 14f, shade)
         canvas.drawText(label, 44f, 78f, text)
-        canvas.drawText("Toca CANCELAR en la esquina inferior izquierda para salir", 44f, height - 38f, text)
+        canvas.drawText("Mantén 1 s la esquina inferior izquierda para cancelar", 44f, height - 38f, text)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action != MotionEvent.ACTION_DOWN) return true
-        if (event.y > height - 110f && event.x < width * 0.45f) {
+        if (event.action != MotionEvent.ACTION_UP) return true
+        if (event.eventTime - event.downTime >= 900L &&
+            event.y > height - 110f && event.x < width * 0.45f) {
             onCancel()
             return true
         }
