@@ -49,7 +49,7 @@ class GuideOverlayView(
     private var startX = 0
     private var startY = 0
 
-    private val panel = RectF(0f, 0f, 300f, 140f)
+    private val panel = RectF(0f, 0f, 520f, 184f)
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -78,7 +78,7 @@ class GuideOverlayView(
         widthMeasureSpec: Int,
         heightMeasureSpec: Int
     ) {
-        setMeasuredDimension(540, 160)
+        setMeasuredDimension(540, 200)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -91,12 +91,9 @@ class GuideOverlayView(
             if (guides) "Guía activada" else "Guía desactivada",
             18f, 53f, text
         )
-        canvas.drawText(
-            "Mantén y arrastra para mover",
-            18f, 78f, text
-        )
-        canvas.drawText(captureStatus, 18f, 105f, text)
-        canvas.drawText("Cerrar", 18f, 130f, text)
+        canvas.drawText(captureStatus.take(48), 18f, 80f, text)
+        canvas.drawText("CALIBRAR MESA (4 esquinas + 6 troneras)", 18f, 118f, text)
+        canvas.drawText("Toca arriba para activar/desactivar · abajo para cerrar", 18f, 153f, text)
 
 
     }
@@ -137,18 +134,24 @@ class GuideOverlayView(
                 if (kotlin.math.abs(dx) < 12 &&
                     kotlin.math.abs(dy) < 12
                 ) {
-                    if (event.y > 112f) {
-                        close()
-                    } else {
-                        guides = !guides
-                        context.sendBroadcast(Intent("com.example.poolguide.GUIDE_TOGGLE").setPackage(context.packageName).putExtra("enabled", guides))
-                        invalidate()
-
-                        Toast.makeText(
-                            context,
-                            "Control de guía",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                    when {
+                        event.y >= 92f && event.y <= 140f -> {
+                            context.sendBroadcast(
+                                Intent("com.example.poolguide.START_CALIBRATION")
+                                    .setPackage(context.packageName)
+                            )
+                            Toast.makeText(context, "Iniciando calibración de mesa", Toast.LENGTH_SHORT).show()
+                        }
+                        event.y > 140f -> close()
+                        else -> {
+                            guides = !guides
+                            context.sendBroadcast(
+                                Intent("com.example.poolguide.GUIDE_TOGGLE")
+                                    .setPackage(context.packageName)
+                                    .putExtra("enabled", guides)
+                            )
+                            invalidate()
+                        }
                     }
                 }
 
