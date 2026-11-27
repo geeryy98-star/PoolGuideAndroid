@@ -41,7 +41,7 @@ class GuideOverlayView(
         style = Paint.Style.STROKE
     }
 
-    private var guides = false
+    private var guides = true
     private var captureStatus = "Captura: esperando datos"
 
     private var downX = 0f
