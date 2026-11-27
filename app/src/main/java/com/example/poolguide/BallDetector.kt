@@ -355,7 +355,7 @@ object BallDetector {
             found += DetectedBall(
                 centerX = centerX,
                 centerY = centerY,
-                radius = diameter * 0.25f,
+                radius = diameter * 0.5f,
                 confidence = confidence
             )
         }
