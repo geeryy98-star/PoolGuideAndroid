@@ -121,14 +121,23 @@ object LivePoolAnalyzer {
                 return if (samples == 0) 0f else white.toFloat() / samples
             }
 
-            val cue = balls.maxByOrNull { ball ->
-                whiteScore(ball) * 0.82f + ball.confidence * 0.18f
-            } ?: return GuideFrameAnalysis("No se identifica la bola blanca", floatArrayOf(), width, height)
+            val rankedBalls = balls.map { ball -> ball to whiteScore(ball) }
+                .sortedByDescending { (ball, whiteness) ->
+                    whiteness * 0.82f + ball.confidence * 0.18f
+                }
+            val cue = rankedBalls.firstOrNull()?.first
+                ?: return GuideFrameAnalysis("No se identifica la bola blanca", floatArrayOf(), width, height)
+            val cueWhiteness = rankedBalls.first().second
+            val runnerUpWhiteness = rankedBalls.getOrNull(1)?.second ?: 0f
 
-            val cueWhiteness = whiteScore(cue)
-            if (cueWhiteness < 0.48f) {
+            // A stripe/solid can have a bright white patch. Require a clearly
+            // white interior and a margin over the next candidate so we do not
+            // silently aim from the wrong ball.
+            if (cueWhiteness < 0.58f ||
+                (rankedBalls.size > 1 && cueWhiteness - runnerUpWhiteness < 0.06f)) {
                 return GuideFrameAnalysis(
-                    "Mesa y bolas detectadas; blanca sin confirmar (" + (cueWhiteness * 100).toInt() + "%)",
+                    "Mesa y bolas detectadas; blanca ambigua (" +
+                        (cueWhiteness * 100).toInt() + "%)",
                     floatArrayOf(), width, height
                 )
             }
