@@ -36,6 +36,7 @@ class ScreenCaptureService : Service() {
     private var lastReport = System.currentTimeMillis()
     private var firstFrame = false
     private var foregroundStarted = false
+    @Volatile private var stopping = false
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
@@ -145,8 +146,11 @@ class ScreenCaptureService : Service() {
             mediaProjection?.registerCallback(
                 object : MediaProjection.Callback() {
                     override fun onStop() {
-                        sendStatus("CAPTURA DETENIDA")
-                        stopSelf()
+                        if (!stopping) {
+                            stopping = true
+                            sendStatus("CAPTURA DETENIDA")
+                            stopSelf()
+                        }
                     }
                 },
                 Handler(mainLooper)
@@ -403,6 +407,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        stopping = true
         virtualDisplay?.release()
         imageReader?.setOnImageAvailableListener(null, null)
         imageReader?.close()
