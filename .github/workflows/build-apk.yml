@@ -53,6 +53,9 @@ jobs:
           test -f app/src/main/java/com/example/poolguide/PoolPhysics.kt
           test -f app/src/main/java/com/example/poolguide/PoolAnalysisEngine.kt
 
+      - name: Run JVM regression tests
+        run: gradle --no-daemon testDebugUnitTest
+
       - name: Compile debug APK
         run: gradle --no-daemon assembleDebug
 
