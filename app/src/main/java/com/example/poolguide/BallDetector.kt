@@ -448,10 +448,14 @@ object BallDetector {
 
                 val distance = sqrt(dx * dx + dy * dy)
 
+                // Pool balls cannot have their centres closer than roughly
+                // one diameter. A wider suppression radius merges multiple
+                // Hough centres around the same physical ball without merging
+                // two separate, correctly sized balls.
                 distance < min(
                     candidate.radius,
                     existing.radius
-                ) * 1.25f
+                ) * 1.6f
             }
 
             if (!duplicate) {
