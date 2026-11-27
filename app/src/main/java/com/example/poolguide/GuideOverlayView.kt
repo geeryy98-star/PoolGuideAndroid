@@ -141,6 +141,7 @@ class GuideOverlayView(
                         close()
                     } else {
                         guides = !guides
+                        context.sendBroadcast(Intent("com.example.poolguide.GUIDE_TOGGLE").setPackage(context.packageName).putExtra("enabled", guides))
                         invalidate()
 
                         Toast.makeText(
