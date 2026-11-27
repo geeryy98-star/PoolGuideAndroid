@@ -35,6 +35,7 @@ class ScreenCaptureService : Service() {
     private var frames = 0
     private var lastReport = System.currentTimeMillis()
     private var firstFrame = false
+    private var foregroundStarted = false
 
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
@@ -389,14 +390,15 @@ class ScreenCaptureService : Service() {
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()
 
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
+        if (!foregroundStarted) {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            foregroundStarted = true
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
         }
     }
 
