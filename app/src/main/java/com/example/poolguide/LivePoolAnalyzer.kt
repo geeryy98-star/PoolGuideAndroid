@@ -72,9 +72,9 @@ object LivePoolAnalyzer {
                 )
 
             val confidencePercent = (table.confidence * 100f).toInt()
-            if (table.confidence < 0.08f || table.pockets.size != 6) {
+            if (table.confidence < 0.08f || table.pockets.size < 4) {
                 return GuideFrameAnalysis(
-                    "Mesa candidata ${confidencePercent}%; validación insuficiente (${bitmap.width}x${bitmap.height})",
+                    "Mesa ${confidencePercent}%; solo ${table.pockets.size}/6 troneras confirmadas",
                     floatArrayOf(), width, height
                 )
             }
