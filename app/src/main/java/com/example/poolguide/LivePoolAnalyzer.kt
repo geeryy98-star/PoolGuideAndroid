@@ -10,7 +10,9 @@ data class GuideFrameAnalysis(
     val message: String,
     val screenLines: FloatArray = floatArrayOf(),
     val screenWidth: Int,
-    val screenHeight: Int
+    val screenHeight: Int,
+    val screenBallMarkers: FloatArray = floatArrayOf(),
+    val cueBallIndex: Int = -1
 )
 
 /**
@@ -146,6 +148,22 @@ object LivePoolAnalyzer {
             val cueWhiteness = rankedBalls.first().second
             val runnerUpWhiteness = rankedBalls.getOrNull(1)?.second ?: 0f
 
+            fun toScreenPoint(x: Float, y: Float): Pair<Float, Float> {
+                return if (width < height) {
+                    (y * width.toFloat() / bitmap.height) to
+                        (height.toFloat() - x * height.toFloat() / bitmap.width)
+                } else {
+                    (x * width.toFloat() / bitmap.width) to
+                        (y * height.toFloat() / bitmap.height)
+                }
+            }
+            val markerScale = max(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
+            val screenMarkers = balls.flatMap { ball ->
+                val point = toScreenPoint(ball.centerX, ball.centerY)
+                listOf(point.first, point.second, ball.radius * markerScale)
+            }.toFloatArray()
+            val cueBallIndex = balls.indexOf(cue)
+
             // A stripe/solid can have a bright white patch. Require a clearly
             // white interior and a margin over the next candidate so we do not
             // silently aim from the wrong ball.
@@ -155,7 +173,7 @@ object LivePoolAnalyzer {
                     "Bolas ${balls.size}; blanca dudosa " +
                         (cueWhiteness * 100).toInt() + "/" +
                         (runnerUpWhiteness * 100).toInt() + "%",
-                    floatArrayOf(), width, height
+                    floatArrayOf(), width, height, screenMarkers, cueBallIndex
                 )
             }
 
@@ -215,7 +233,7 @@ object LivePoolAnalyzer {
             } else {
                 "B:${balls.size} blanca:${(cueWhiteness * 100).toInt()}% tiros:${result.candidates.size}; estimada"
             }
-            return GuideFrameAnalysis(status, lines, width, height)
+            return GuideFrameAnalysis(status, lines, width, height, screenMarkers, cueBallIndex)
         } catch (error: Exception) {
             return GuideFrameAnalysis("Análisis: ${error.javaClass.simpleName}", floatArrayOf(), width, height)
         } finally {
