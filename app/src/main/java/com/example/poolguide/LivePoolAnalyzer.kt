@@ -2,6 +2,7 @@ package com.example.poolguide
 
 import android.graphics.Bitmap
 import android.graphics.RectF
+import android.graphics.Matrix
 import android.media.Image
 import kotlin.math.max
 
@@ -43,13 +44,25 @@ object LivePoolAnalyzer {
         val fullBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         fullBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
+        // Keep the complete analysis in landscape coordinates. Previously the
+        // table detector transposed only its edge map while ball detection and
+        // shot planning still consumed the portrait bitmap, mixing coordinate
+        // systems and producing invalid bounds/trajectories.
+        val orientedBitmap = if (width < height) {
+            val rotation = Matrix().apply { postRotate(90f) }
+            Bitmap.createBitmap(fullBitmap, 0, 0, width, height, rotation, true)
+                .also { fullBitmap.recycle() }
+        } else {
+            fullBitmap
+        }
+
         val maxDimension = 640
-        val scale = minOf(1f, maxDimension.toFloat() / max(width, height))
-        val scaledWidth = max(1, (width * scale).toInt())
-        val scaledHeight = max(1, (height * scale).toInt())
-        val bitmap = if (scaledWidth == width && scaledHeight == height) fullBitmap
-            else Bitmap.createScaledBitmap(fullBitmap, scaledWidth, scaledHeight, true)
-        if (bitmap !== fullBitmap) fullBitmap.recycle()
+        val scale = minOf(1f, maxDimension.toFloat() / max(orientedBitmap.width, orientedBitmap.height))
+        val scaledWidth = max(1, (orientedBitmap.width * scale).toInt())
+        val scaledHeight = max(1, (orientedBitmap.height * scale).toInt())
+        val bitmap = if (scaledWidth == orientedBitmap.width && scaledHeight == orientedBitmap.height) orientedBitmap
+            else Bitmap.createScaledBitmap(orientedBitmap, scaledWidth, scaledHeight, true)
+        if (bitmap !== orientedBitmap) orientedBitmap.recycle()
 
         try {
             val table = TableDetector.detect(bitmap)
@@ -134,12 +147,23 @@ object LivePoolAnalyzer {
 
             val tableWidth = table.bounds.width()
             val lines = best.plan.segments.flatMap { segment ->
-                listOf(
-                    (table.bounds.left + segment.start.x * tableWidth) * factorX,
-                    (table.bounds.top + segment.start.y * tableWidth) * factorY,
-                    (table.bounds.left + segment.end.x * tableWidth) * factorX,
-                    (table.bounds.top + segment.end.y * tableWidth) * factorY
-                )
+                val sx = (table.bounds.left + segment.start.x * tableWidth) * factorX
+                val sy = (table.bounds.top + segment.start.y * tableWidth) * factorY
+                val ex = (table.bounds.left + segment.end.x * tableWidth) * factorX
+                val ey = (table.bounds.top + segment.end.y * tableWidth) * factorY
+
+                if (width < height) {
+                    // Inverse of the 90° clockwise bitmap rotation:
+                    // originalX = rotatedY, originalY = originalHeight - rotatedX.
+                    listOf(
+                        sy,
+                        height.toFloat() - sx,
+                        ey,
+                        height.toFloat() - ex
+                    )
+                } else {
+                    listOf(sx, sy, ex, ey)
+                }
             }.toFloatArray()
 
             val status = if (best.plan.reachesPocket) {
