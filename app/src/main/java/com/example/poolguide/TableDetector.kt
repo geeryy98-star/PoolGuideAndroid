@@ -27,7 +27,6 @@ object TableDetector {
         val y: Int
     )
 
-    private const val SAMPLE_STEP = 3
     private const val EDGE_THRESHOLD = 55f
 
     /**
@@ -119,8 +118,8 @@ object TableDetector {
 
         val edges = BooleanArray(width * height)
 
-        for (y in 1 until height - 1 step SAMPLE_STEP) {
-            for (x in 1 until width - 1 step SAMPLE_STEP) {
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
 
                 val index = y * width + x
 
@@ -162,8 +161,10 @@ object TableDetector {
         val maxX = width * 19 / 20
         val minY = height / 20
         val maxY = height * 19 / 20
-        val candidateStep = max(8, min(width, height) / 28)
-        val lineStep = max(4, min(width, height) / 70)
+        // Coarse candidate grid keeps the live detector responsive on phones.
+        // Edge pixels are now dense, so line samples need not align to a sparse grid.
+        val candidateStep = max(12, min(width, height) / 18)
+        val lineStep = max(3, min(width, height) / 90)
 
         var bestScore = 0f
         var best: RectF? = null
