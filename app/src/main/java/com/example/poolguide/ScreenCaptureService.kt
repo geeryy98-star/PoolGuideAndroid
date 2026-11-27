@@ -104,7 +104,7 @@ class ScreenCaptureService : Service() {
 
                             if (!firstFrame) {
                                 firstFrame = true
-                                sendStatus("RECIBIENDO IMAGEN")
+                                sendStatus("Captura funcionando: primer fotograma recibido")
                             }
 
                             val now = System.currentTimeMillis()
