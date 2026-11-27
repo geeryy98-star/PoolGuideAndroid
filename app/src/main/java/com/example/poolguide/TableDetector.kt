@@ -170,56 +170,60 @@ object TableDetector {
         width: Int,
         height: Int
     ): RectF? {
-        // The game table is approximately 2:1. Search a coarse grid rather
-        // than exhaustively testing every possible rectangle on every frame.
+        // The rendered 8 Ball Pool table does not always expose the exact
+        // 2:1 playing-surface ratio: rails, pockets and screen crop change it.
+        // Search a bounded range of plausible landscape table proportions.
         val minTableWidth = width / 3
         val maxTableWidth = width * 19 / 20
-        val minX = width / 20
-        val maxX = width * 19 / 20
-        val minY = height / 20
-        val maxY = height * 19 / 20
-        // Coarse candidate grid keeps the live detector responsive on phones.
-        // Edge pixels are now dense, so line samples need not align to a sparse grid.
-        val candidateStep = max(12, min(width, height) / 18)
+        val minX = width / 40
+        val maxX = width * 39 / 40
+        val minY = height / 40
+        val maxY = height * 39 / 40
+        val candidateStep = max(8, min(width, height) / 24)
         val lineStep = max(3, min(width, height) / 90)
+        val aspectRatios = floatArrayOf(1.65f, 1.75f, 1.85f, 1.95f, 2.05f, 2.15f, 2.25f)
 
         var bestScore = 0f
         var best: RectF? = null
 
-        var tableWidth = minTableWidth
-        while (tableWidth <= maxTableWidth) {
-            val tableHeight = tableWidth / 2
-            if (tableHeight < height / 5 || tableHeight > height * 9 / 10) {
-                tableWidth += candidateStep
-                continue
-            }
-
-            var left = minX
-            while (left + tableWidth <= maxX) {
-                val right = left + tableWidth
-                var top = minY
-                while (top + tableHeight <= maxY) {
-                    val bottom = top + tableHeight
-                    val topScore = edgeCoverage(edges, width, height, left, top, right, top, lineStep)
-                    val bottomScore = edgeCoverage(edges, width, height, left, bottom, right, bottom, lineStep)
-                    val leftScore = edgeCoverage(edges, width, height, left, top, left, bottom, lineStep)
-                    val rightScore = edgeCoverage(edges, width, height, right, top, right, bottom, lineStep)
-                    // Each side is scored as a proportion of samples with an edge nearby.
-                    // This tolerates anti-aliasing and small offsets in the coarse search grid.
-                    val score = (topScore + bottomScore + leftScore + rightScore) / 4f
-
-                    if (score > bestScore) {
-                        bestScore = score
-                        best = RectF(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
-                    }
-                    top += candidateStep
+        for (aspect in aspectRatios) {
+            var tableWidth = minTableWidth
+            while (tableWidth <= maxTableWidth) {
+                val tableHeight = (tableWidth / aspect).toInt()
+                if (tableHeight < height / 5 || tableHeight > height * 9 / 10) {
+                    tableWidth += candidateStep
+                    continue
                 }
-                left += candidateStep
+
+                var left = minX
+                while (left + tableWidth <= maxX) {
+                    val right = left + tableWidth
+                    var top = minY
+                    while (top + tableHeight <= maxY) {
+                        val bottom = top + tableHeight
+                        val topScore = edgeCoverage(edges, width, height, left, top, right, top, lineStep)
+                        val bottomScore = edgeCoverage(edges, width, height, left, bottom, right, bottom, lineStep)
+                        val leftScore = edgeCoverage(edges, width, height, left, top, left, bottom, lineStep)
+                        val rightScore = edgeCoverage(edges, width, height, right, top, right, bottom, lineStep)
+                        val weakest = min(min(topScore, bottomScore), min(leftScore, rightScore))
+                        val average = (topScore + bottomScore + leftScore + rightScore) / 4f
+                        // Reward four-sided support and penalize candidates
+                        // explained by only one strong UI edge.
+                        val score = average * 0.65f + weakest * 0.35f
+
+                        if (score > bestScore) {
+                            bestScore = score
+                            best = RectF(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
+                        }
+                        top += candidateStep
+                    }
+                    left += candidateStep
+                }
+                tableWidth += candidateStep
             }
-            tableWidth += candidateStep
         }
 
-        return if (bestScore >= 0.16f) best else null
+        return if (bestScore >= 0.13f) best else null
     }
 
     /**
