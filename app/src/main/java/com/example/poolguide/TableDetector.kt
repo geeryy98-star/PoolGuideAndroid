@@ -53,11 +53,28 @@ object TableDetector {
             height
         )
 
-        val bounds = findLargestRectangle(
-            edges,
-            width,
-            height
-        ) ?: return null
+        // Android/MediaProjection puede entregar el fotograma en vertical
+        // aunque el juego esté girado. En ese caso transponemos el mapa de
+        // bordes para buscar la mesa con su lado largo en horizontal.
+        val bounds = if (width >= height) {
+            findLargestRectangle(edges, width, height)
+        } else {
+            val transposed = BooleanArray(edges.size)
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    transposed[x * height + y] = edges[y * width + x]
+                }
+            }
+            val rotatedBounds = findLargestRectangle(transposed, height, width)
+            rotatedBounds?.let { rotated ->
+                RectF(
+                    rotated.top,
+                    height - rotated.right,
+                    rotated.bottom,
+                    height - rotated.left
+                )
+            }
+        } ?: return null
 
         val pockets = findPocketCandidates(
             edges,
