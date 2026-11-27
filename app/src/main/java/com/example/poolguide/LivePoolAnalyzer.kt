@@ -18,7 +18,7 @@ data class GuideFrameAnalysis(
  * expressed in the original MediaProjection frame, not in the downscaled bitmap.
  */
 object LivePoolAnalyzer {
-    fun analyze(image: Image): GuideFrameAnalysis {
+    fun analyze(image: Image, calibration: TableCalibration?): GuideFrameAnalysis {
         val width = image.width
         val height = image.height
         val plane = image.planes.firstOrNull()
@@ -65,11 +65,29 @@ object LivePoolAnalyzer {
         if (bitmap !== orientedBitmap) orientedBitmap.recycle()
 
         try {
-            val table = TableDetector.detect(bitmap)
+            val savedCalibration = calibration
                 ?: return GuideFrameAnalysis(
-                    "Sin rectángulo válido (${bitmap.width}x${bitmap.height}); buscando mesa…",
+                    "Pendiente calibración: usa CALIBRAR MESA en el panel flotante",
                     floatArrayOf(), width, height
                 )
+            val calibratedBounds = RectF(
+                savedCalibration.bounds.left * bitmap.width,
+                savedCalibration.bounds.top * bitmap.height,
+                savedCalibration.bounds.right * bitmap.width,
+                savedCalibration.bounds.bottom * bitmap.height
+            )
+            val calibratedPockets = savedCalibration.pockets.map { point ->
+                DetectedPocket(
+                    center = PoolPoint(point.x * bitmap.width, point.y * bitmap.height),
+                    radius = bitmap.width * 0.012f,
+                    confidence = 1f
+                )
+            }
+            val table = DetectedTable(
+                bounds = calibratedBounds,
+                pockets = calibratedPockets,
+                confidence = 1f
+            )
 
             val confidencePercent = (table.confidence * 100f).toInt()
             if (table.confidence < 0.08f || table.pockets.size < 4) {
