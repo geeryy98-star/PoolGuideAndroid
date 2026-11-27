@@ -157,7 +157,7 @@ object TableDetector {
         // The game table is approximately 2:1. Search a coarse grid rather
         // than exhaustively testing every possible rectangle on every frame.
         val minTableWidth = width / 3
-        val maxTableWidth = width * 9 / 10
+        val maxTableWidth = width * 19 / 20
         val minX = width / 20
         val maxX = width * 19 / 20
         val minY = height / 20
@@ -171,7 +171,7 @@ object TableDetector {
         var tableWidth = minTableWidth
         while (tableWidth <= maxTableWidth) {
             val tableHeight = tableWidth / 2
-            if (tableHeight < height / 5 || tableHeight > height * 4 / 5) {
+            if (tableHeight < height / 5 || tableHeight > height * 9 / 10) {
                 tableWidth += candidateStep
                 continue
             }
