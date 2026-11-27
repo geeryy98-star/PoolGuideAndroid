@@ -1,6 +1,9 @@
 name: Build Pool Guide APK
 
 on:
+  push:
+    branches:
+      - fix/poolguide-integration
   workflow_dispatch:
 
 permissions:
