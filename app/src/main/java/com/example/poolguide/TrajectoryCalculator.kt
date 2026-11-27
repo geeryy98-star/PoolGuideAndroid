@@ -420,19 +420,19 @@ object TrajectoryCalculator {
         val b = offset.dot(direction)
         val c = offset.dot(offset) - radius * radius
 
-        val discriminant = b * b - c
+        // If the moving ball already overlaps the capture circle, the
+        // near intersection is behind the ray origin. Treat it as captured
+        // only when it is moving toward the pocket; otherwise it is leaving
+        // the capture area and must not be counted as pocketed.
+        if (c <= 0f) {
+            return if (b < -EPSILON) -b else null
+        }
 
+        val discriminant = b * b - c
         if (discriminant < 0f) return null
 
         val root = sqrt(discriminant)
-
         val near = -b - root
-        val far = -b + root
-
-        return when {
-            near > EPSILON -> near
-            far > EPSILON -> far
-            else -> null
-        }
+        return if (near > EPSILON) near else null
     }
 }
