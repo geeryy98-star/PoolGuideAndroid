@@ -88,7 +88,7 @@ class GuideOverlayView(
 
         canvas.drawText("POOL GUIDE", 18f, 28f, text)
         canvas.drawText(
-            if (guides) "Guías demo: ON" else "Toca para guías demo",
+            if (guides) "Guía activada" else "Guía desactivada",
             18f, 53f, text
         )
         canvas.drawText(
@@ -98,10 +98,7 @@ class GuideOverlayView(
         canvas.drawText(captureStatus, 18f, 105f, text)
         canvas.drawText("Cerrar", 18f, 130f, text)
 
-        if (guides) {
-            canvas.drawLine(318f, 18f, 520f, 18f, line)
-            canvas.drawLine(318f, 34f, 450f, 100f, red)
-        }
+
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -148,7 +145,7 @@ class GuideOverlayView(
 
                         Toast.makeText(
                             context,
-                            "Guías de demostración",
+                            "Control de guía",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
