@@ -19,6 +19,14 @@ data class DetectedBall(
     val confidence: Float
 )
 
+data class BallDetectionReport(
+    val balls: List<DetectedBall>,
+    val circleCandidates: Int,
+    val blobCandidates: Int,
+    val maxCircleScore: Float,
+    val estimatedRadius: Float
+)
+
 object BallDetector {
 
     private const val MIN_CONFIDENCE = 0.34f
@@ -36,10 +44,23 @@ object BallDetector {
         tableBounds: RectF,
         expectedRadiusPx: Float? = null,
         maxBalls: Int = 16
-    ): List<DetectedBall> {
+    ): List<DetectedBall> = detectDetailed(
+        bitmap, tableBounds, expectedRadiusPx, maxBalls
+    ).balls
+
+    /**
+     * Same detector with stage diagnostics. The report lets the live overlay
+     * distinguish a bad crop/radius from a detector threshold that is too strict.
+     */
+    fun detectDetailed(
+        bitmap: Bitmap,
+        tableBounds: RectF,
+        expectedRadiusPx: Float? = null,
+        maxBalls: Int = 16
+    ): BallDetectionReport {
 
         if (bitmap.isRecycled || maxBalls <= 0) {
-            return emptyList()
+            return BallDetectionReport(emptyList(), 0, 0, 0f, 0f)
         }
 
         val left = max(1, tableBounds.left.roundToInt())
@@ -57,7 +78,7 @@ object BallDetector {
         val height = bottom - top
 
         if (width < 30 || height < 30) {
-            return emptyList()
+            return BallDetectionReport(emptyList(), 0, 0, 0f, 0f)
         }
 
         val pixels = IntArray(width * height)
@@ -93,17 +114,17 @@ object BallDetector {
             expectedRadiusPx ?: (width * 0.012f)
 
         if (estimatedRadius <= 2f) {
-            return emptyList()
+            return BallDetectionReport(emptyList(), 0, 0, 0f, estimatedRadius)
         }
 
         val minRadius = max(
             3,
-            (estimatedRadius * 0.58f).roundToInt()
+            (estimatedRadius * 0.45f).roundToInt()
         )
 
         val maxRadius = max(
             minRadius + 1,
-            (estimatedRadius * 1.55f).roundToInt()
+            (estimatedRadius * 2.00f).roundToInt()
         )
 
         val radiusStep = max(
@@ -112,6 +133,7 @@ object BallDetector {
         )
 
         val candidates = mutableListOf<DetectedBall>()
+        var maxCircleScore = 0f
 
         val angles = FloatArray(CIRCLE_SAMPLES) {
             (2.0 * PI * it / CIRCLE_SAMPLES).toFloat()
@@ -139,6 +161,7 @@ object BallDetector {
                         radius,
                         angles
                     )
+                    if (score > maxCircleScore) maxCircleScore = score
 
                     // A circular edge alone is not enough: table markings and
                     // reflections can also form rings. A real ball should have
@@ -171,20 +194,28 @@ object BallDetector {
             radius += radiusStep
         }
 
-        // A second, color/blob-based pass complements the circle-edge detector.
-        // It is especially useful when antialiasing or ball stripes break the rim.
-        candidates.addAll(
-            detectColorBlobs(
-                pixels = pixels,
-                cropWidth = width,
-                cropHeight = height,
-                offsetX = left,
-                offsetY = top,
-                expectedRadius = estimatedRadius
-            )
-        )
+        val circleCount = candidates.size
 
-        return suppressDuplicates(candidates, maxBalls)
+        // A second, colour/blob-based pass complements the circle-edge detector.
+        // Keep a wider size window than the theoretical radius: game scaling,
+        // table borders and antialiasing make a fixed 1.2%-of-table estimate noisy.
+        val blobs = detectColorBlobs(
+            pixels = pixels,
+            cropWidth = width,
+            cropHeight = height,
+            offsetX = left,
+            offsetY = top,
+            expectedRadius = estimatedRadius
+        )
+        candidates.addAll(blobs)
+
+        return BallDetectionReport(
+            balls = suppressDuplicates(candidates, maxBalls),
+            circleCandidates = circleCount,
+            blobCandidates = blobs.size,
+            maxCircleScore = maxCircleScore,
+            estimatedRadius = estimatedRadius
+        )
     }
 
     /**
@@ -359,8 +390,10 @@ object BallDetector {
         val queue = IntArray(grid.size)
         val found = mutableListOf<DetectedBall>()
         val expectedDiameter = expectedRadius * 2f
-        val minDiameter = expectedDiameter * 0.62f
-        val maxDiameter = expectedDiameter * 1.48f
+        // A ball may render noticeably larger than the nominal physical ratio
+        // when the calibrated bounds include only the playing bed, not rails.
+        val minDiameter = expectedDiameter * 0.55f
+        val maxDiameter = expectedDiameter * 2.00f
 
         for (start in grid.indices) {
             if (!foreground[start] || visited[start]) continue
