@@ -161,10 +161,20 @@ object BallDetector {
             radius += radiusStep
         }
 
-        return suppressDuplicates(
-            candidates,
-            maxBalls
+        // A second, color/blob-based pass complements the circle-edge detector.
+        // It is especially useful when antialiasing or ball stripes break the rim.
+        candidates.addAll(
+            detectColorBlobs(
+                pixels = pixels,
+                cropWidth = width,
+                cropHeight = height,
+                offsetX = left,
+                offsetY = top,
+                expectedRadius = estimatedRadius
+            )
         )
+
+        return suppressDuplicates(candidates, maxBalls)
     }
 
     private fun calculateEdges(
@@ -229,6 +239,127 @@ object BallDetector {
         }
 
         return hits.toFloat() / angles.size
+    }
+
+
+    /**
+     * Fast felt-background segmentation inspired by PoolAimAssist.
+     * The dominant quantized table color is removed, then near-circular
+     * connected components of approximately one ball diameter are retained.
+     */
+    private fun detectColorBlobs(
+        pixels: IntArray,
+        cropWidth: Int,
+        cropHeight: Int,
+        offsetX: Int,
+        offsetY: Int,
+        expectedRadius: Float
+    ): List<DetectedBall> {
+        val step = max(2, (expectedRadius / 3f).roundToInt())
+        val cols = (cropWidth + step - 1) / step
+        val rows = (cropHeight + step - 1) / step
+        if (cols < 4 || rows < 4) return emptyList()
+
+        val grid = IntArray(cols * rows)
+        val buckets = HashMap<Int, Int>()
+        for (gy in 0 until rows) {
+            val y = min(cropHeight - 1, gy * step)
+            for (gx in 0 until cols) {
+                val x = min(cropWidth - 1, gx * step)
+                val color = pixels[y * cropWidth + x]
+                val index = gy * cols + gx
+                grid[index] = color
+                val red = ((color shr 16) and 255) / 16
+                val green = ((color shr 8) and 255) / 16
+                val blue = (color and 255) / 16
+                val key = (red shl 8) or (green shl 4) or blue
+                buckets[key] = (buckets[key] ?: 0) + 1
+            }
+        }
+
+        val dominantKey = buckets.maxByOrNull { it.value }?.key ?: return emptyList()
+        val feltR = ((dominantKey shr 8) and 15) * 16 + 8
+        val feltG = ((dominantKey shr 4) and 15) * 16 + 8
+        val feltB = (dominantKey and 15) * 16 + 8
+        val foreground = BooleanArray(grid.size)
+        val visited = BooleanArray(grid.size)
+        for (i in grid.indices) {
+            val color = grid[i]
+            val dr = ((color shr 16) and 255) - feltR
+            val dg = ((color shr 8) and 255) - feltG
+            val db = (color and 255) - feltB
+            foreground[i] = dr * dr + dg * dg + db * db > 48 * 48
+        }
+
+        val queue = IntArray(grid.size)
+        val found = mutableListOf<DetectedBall>()
+        val expectedDiameter = expectedRadius * 2f
+        val minDiameter = expectedDiameter * 0.62f
+        val maxDiameter = expectedDiameter * 1.48f
+
+        for (start in grid.indices) {
+            if (!foreground[start] || visited[start]) continue
+            var head = 0
+            var tail = 0
+            queue[tail++] = start
+            visited[start] = true
+            var minX = cols
+            var maxX = -1
+            var minY = rows
+            var maxY = -1
+            var count = 0
+            var sumX = 0L
+            var sumY = 0L
+
+            while (head < tail) {
+                val current = queue[head++]
+                val x = current % cols
+                val y = current / cols
+                count++
+                sumX += x
+                sumY += y
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                minY = min(minY, y)
+                maxY = max(maxY, y)
+
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx
+                    val ny = y + dy
+                    if (nx !in 0 until cols || ny !in 0 until rows) continue
+                    val next = ny * cols + nx
+                    if (foreground[next] && !visited[next]) {
+                        visited[next] = true
+                        queue[tail++] = next
+                    }
+                }
+            }
+
+            val boxW = maxX - minX + 1
+            val boxH = maxY - minY + 1
+            val diameterW = boxW * step.toFloat()
+            val diameterH = boxH * step.toFloat()
+            val diameter = max(diameterW, diameterH)
+            val aspect = diameterW / max(1f, diameterH)
+            val compactness = count.toFloat() / (boxW * boxH)
+            if (diameter !in minDiameter..maxDiameter ||
+                aspect !in 0.58f..1.72f ||
+                compactness < 0.22f) continue
+
+            val centerX = offsetX + ((minX + maxX + 1) * 0.5f * step)
+            val centerY = offsetY + ((minY + maxY + 1) * 0.5f * step)
+            val shapeScore = (1f - abs(1f - aspect)).coerceIn(0f, 1f)
+            val confidence = (0.44f + compactness * 0.28f + shapeScore * 0.12f)
+                .coerceIn(0.45f, 0.78f)
+            found += DetectedBall(
+                centerX = centerX,
+                centerY = centerY,
+                radius = diameter * 0.25f,
+                confidence = confidence
+            )
+        }
+        return found
     }
 
     private fun suppressDuplicates(
