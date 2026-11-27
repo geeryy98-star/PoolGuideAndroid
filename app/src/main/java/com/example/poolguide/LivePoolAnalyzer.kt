@@ -106,7 +106,7 @@ object LivePoolAnalyzer {
             )
             if (balls.isEmpty()) {
                 return GuideFrameAnalysis(
-                    "Mesa validada ${confidencePercent}%; buscando bolas…",
+                    "Bolas: 0; mesa calibrada, sin candidatos",
                     floatArrayOf(), width, height
                 )
             }
@@ -152,8 +152,9 @@ object LivePoolAnalyzer {
             if (cueWhiteness < 0.58f ||
                 (rankedBalls.size > 1 && cueWhiteness - runnerUpWhiteness < 0.06f)) {
                 return GuideFrameAnalysis(
-                    "Mesa y bolas detectadas; blanca ambigua (" +
-                        (cueWhiteness * 100).toInt() + "%)",
+                    "Bolas ${balls.size}; blanca dudosa " +
+                        (cueWhiteness * 100).toInt() + "/" +
+                        (runnerUpWhiteness * 100).toInt() + "%",
                     floatArrayOf(), width, height
                 )
             }
@@ -183,7 +184,10 @@ object LivePoolAnalyzer {
                         }
                 )
                 .firstOrNull()
-                ?: return GuideFrameAnalysis(result.message, floatArrayOf(), width, height)
+                ?: return GuideFrameAnalysis(
+                    "Bolas ${balls.size}; blanca OK; 0 tiros (${result.message})",
+                    floatArrayOf(), width, height
+                )
 
             val tableWidth = table.bounds.width()
             val lines = best.plan.segments.flatMap { segment ->
@@ -207,9 +211,9 @@ object LivePoolAnalyzer {
             }.toFloatArray()
 
             val status = if (best.plan.reachesPocket) {
-                "Trayectoria candidata calculada"
+                "B:${balls.size} blanca:${(cueWhiteness * 100).toInt()}% tiros:${result.candidates.size}; llega"
             } else {
-                "Trayectoria estimada; tronera no confirmada"
+                "B:${balls.size} blanca:${(cueWhiteness * 100).toInt()}% tiros:${result.candidates.size}; estimada"
             }
             return GuideFrameAnalysis(status, lines, width, height)
         } catch (error: Exception) {
