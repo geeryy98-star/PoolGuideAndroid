@@ -140,9 +140,7 @@ object LivePoolAnalyzer {
             }
 
             val rankedBalls = balls.map { ball -> ball to whiteScore(ball) }
-                .sortedByDescending { (ball, whiteness) ->
-                    whiteness * 0.82f + ball.confidence * 0.18f
-                }
+                .sortedByDescending { (_, whiteness) -> whiteness }
             val cue = rankedBalls.firstOrNull()?.first
                 ?: return GuideFrameAnalysis("No se identifica la bola blanca", floatArrayOf(), width, height)
             val cueWhiteness = rankedBalls.first().second
