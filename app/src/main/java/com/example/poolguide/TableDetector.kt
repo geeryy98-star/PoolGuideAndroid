@@ -69,9 +69,9 @@ object TableDetector {
             rotatedBounds?.let { rotated ->
                 RectF(
                     rotated.top,
-                    height - rotated.right,
+                    rotated.left,
                     rotated.bottom,
-                    height - rotated.left
+                    rotated.right
                 )
             }
         } ?: return null
