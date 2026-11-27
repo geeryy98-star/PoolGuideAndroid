@@ -242,7 +242,10 @@ object TableDetector {
         val distance = sqrt((dx * dx + dy * dy).toFloat()).toInt()
         if (distance <= 0) return 0f
         val samples = max(1, distance / step)
-        val tolerance = 3
+        // Candidate rectangles are scanned on a coarse grid. A fixed 3 px
+        // tolerance is smaller than the possible grid offset and misses real
+        // rails consistently on the 640 px analysis frame.
+        val tolerance = max(6, min(width, height) / 28)
         var hits = 0
         for (i in 0..samples) {
             val fraction = i.toFloat() / samples
