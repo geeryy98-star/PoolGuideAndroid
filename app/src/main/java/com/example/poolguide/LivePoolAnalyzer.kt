@@ -100,15 +100,17 @@ object LivePoolAnalyzer {
             }
 
             val expectedRadius = table.bounds.width() * 0.012f
-            val balls = BallDetector.detect(
+            val detection = BallDetector.detectDetailed(
                 bitmap = bitmap,
                 tableBounds = table.bounds,
                 expectedRadiusPx = expectedRadius,
                 maxBalls = 16
             )
+            val balls = detection.balls
             if (balls.isEmpty()) {
+                val maxScore = (detection.maxCircleScore * 100f).toInt()
                 return GuideFrameAnalysis(
-                    "Bolas: 0; mesa ${calibratedBounds.width().toInt()}x${calibratedBounds.height().toInt()} px; radio ${expectedRadius.toInt()} px; sin candidatos",
+                    "0 bolas | mesa ${calibratedBounds.width().toInt()}x${calibratedBounds.height().toInt()} | r${expectedRadius.toInt()} | circ:${detection.circleCandidates} max:${maxScore}% blob:${detection.blobCandidates}",
                     floatArrayOf(), width, height
                 )
             }
