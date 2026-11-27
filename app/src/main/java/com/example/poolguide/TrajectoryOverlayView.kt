@@ -24,7 +24,7 @@ class TrajectoryOverlayView(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
     }
     private var lines = floatArrayOf()
-    private var enabled = false
+    private var enabled = true
     private var sourceWidth = 0
     private var sourceHeight = 0
 
