@@ -126,7 +126,9 @@ class ScreenCaptureService : Service() {
                                 sendGuideLines(
                                     analysis.screenLines,
                                     analysis.screenWidth,
-                                    analysis.screenHeight
+                                    analysis.screenHeight,
+                                    analysis.screenBallMarkers,
+                                    analysis.cueBallIndex
                                 )
 
                                 frames = 0
@@ -355,12 +357,14 @@ class ScreenCaptureService : Service() {
         return groups
     }
 
-    private fun sendGuideLines(lines: FloatArray, width: Int, height: Int) {
+    private fun sendGuideLines(lines: FloatArray, width: Int, height: Int, ballMarkers: FloatArray, cueIndex: Int) {
         val intent = Intent("com.example.poolguide.GUIDE_LINES").apply {
             setPackage(packageName)
             putExtra("lines", lines)
             putExtra("screen_width", width)
             putExtra("screen_height", height)
+            putExtra("ball_markers", ballMarkers)
+            putExtra("cue_index", cueIndex)
         }
         sendBroadcast(intent)
     }
