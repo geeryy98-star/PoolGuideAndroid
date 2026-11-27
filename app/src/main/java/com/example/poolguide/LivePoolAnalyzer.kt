@@ -106,7 +106,8 @@ object LivePoolAnalyzer {
                 pocketCentersPx = pocketCenters,
                 expectedRadiusPx = expectedRadius,
                 pocketCaptureRadiusPx = cue.radius * 2.2f,
-                maxRebounds = 2
+                maxRebounds = 2,
+                preDetectedBalls = balls
             )
             val best = result.candidates
                 .sortedWith(
