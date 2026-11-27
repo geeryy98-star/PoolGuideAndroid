@@ -231,7 +231,8 @@ object TrajectoryCalculator {
                 pocketHit.distance <= wallHit.distance &&
                 (ballHit == null || pocketHit.distance <= ballHit.distance)
             ) {
-                val end = position + direction * pocketHit.distance
+                val end = if (pocketHit.distance <= EPSILON) pocketHit.center
+                    else position + direction * pocketHit.distance
 
                 segments += TrajectorySegment(
                     position,
@@ -311,7 +312,8 @@ object TrajectoryCalculator {
     )
 
     private data class PocketHit(
-        val distance: Float
+        val distance: Float,
+        val center: PoolPoint
     )
 
     private fun distanceToWall(
@@ -375,7 +377,7 @@ object TrajectoryCalculator {
                 pocket.captureRadius
             )
 
-            if (distance != null) PocketHit(distance) else null
+            if (distance != null) PocketHit(distance, pocket.center) else null
 
         }.minByOrNull { it.distance }
     }
@@ -425,7 +427,7 @@ object TrajectoryCalculator {
         // only when it is moving toward the pocket; otherwise it is leaving
         // the capture area and must not be counted as pocketed.
         if (c <= 0f) {
-            return if (b < -EPSILON) -b else null
+            return if (b < -EPSILON) 0f else null
         }
 
         val discriminant = b * b - c
