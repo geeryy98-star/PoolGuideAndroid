@@ -109,8 +109,15 @@ object LivePoolAnalyzer {
                 maxRebounds = 2
             )
             val best = result.candidates
-                .sortedWith(compareBy<PoolShotCandidate> { if (it.plan.reachesPocket) 0 else 1 }
-                    .thenBy { it.plan.predictedRebounds })
+                .sortedWith(
+                    compareBy<PoolShotCandidate> { if (it.plan.reachesPocket) 0 else 1 }
+                        .thenBy { it.plan.predictedRebounds }
+                        .thenBy { candidate ->
+                            candidate.plan.segments.sumOf { segment ->
+                                segment.start.distanceTo(segment.end).toDouble()
+                            }
+                        }
+                )
                 .firstOrNull()
                 ?: return GuideFrameAnalysis(result.message, floatArrayOf(), width, height)
 
