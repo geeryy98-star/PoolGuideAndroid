@@ -52,11 +52,11 @@ jobs:
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/GuideOverlayView.kt "$DEST/"
 
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/PoolAnalysisEngine.kt "$DEST/"
-          cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/PoolPhysics.kt "$DEST/"
+          cp "PoolGuideAndroid/app/src/main/java/com/example/poolguide/PoolPhysics.kt." "$DEST/PoolPhysics.kt"
           cp PoolGuideAndroid/app/src/main/java/com/example/poolguide/TableDetector.kt "$DEST/"
 
           cp BallDetector.kt "$DEST/"
-          cp CalculadoraDeTrayectoria.kt "$DEST/"
+          cp TrajectoryCalculator.kt "$DEST/"
 
           cp PoolGuideAndroid/app/src/main/AndroidManifest.xml source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
 
@@ -66,9 +66,12 @@ jobs:
           echo "Archivos Kotlin incorporados:"
           ls -la "$DEST"
           test -f "$DEST/BallDetector.kt"
-          test -f "$DEST/CalculadoraDeTrayectoria.kt"
+          test -f "$DEST/TrajectoryCalculator.kt"
           test -f "$DEST/PoolAnalysisEngine.kt"
           test -f "$DEST/PoolPhysics.kt"
+          test -f "$DEST/MainActivity.kt"
+          test -f "$DEST/ScreenCaptureService.kt"
+          test -f "$DEST/GuideOverlayView.kt"
           test -f "$DEST/TableDetector.kt"
 
       - name: Corregir compatibilidad Java
@@ -82,6 +85,14 @@ jobs:
               }
           }
           EOF
+
+      - name: Comprobar estructura Gradle
+        run: |
+          set -e
+          test -f source/PoolGuideAndroid/settings.gradle
+          test -f source/PoolGuideAndroid/build.gradle
+          test -f source/PoolGuideAndroid/app/build.gradle
+          test -f source/PoolGuideAndroid/app/src/main/AndroidManifest.xml
 
       - name: Compilar APK
         run: |
