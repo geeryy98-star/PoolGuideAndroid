@@ -154,68 +154,54 @@ object TableDetector {
         width: Int,
         height: Int
     ): RectF? {
+        // The game table is approximately 2:1. Search a coarse grid rather
+        // than exhaustively testing every possible rectangle on every frame.
+        val minTableWidth = width / 3
+        val maxTableWidth = width * 9 / 10
+        val minX = width / 20
+        val maxX = width * 19 / 20
+        val minY = height / 20
+        val maxY = height * 19 / 20
+        val candidateStep = max(8, min(width, height) / 28)
+        val lineStep = max(4, min(width, height) / 70)
 
-        val minX = width / 12
-        val maxX = width * 11 / 12
-        val minY = height / 12
-        val maxY = height * 11 / 12
-
-        var bestScore = 0
+        var bestScore = 0f
         var best: RectF? = null
 
-        val step = max(4, min(width, height) / 100)
+        var tableWidth = minTableWidth
+        while (tableWidth <= maxTableWidth) {
+            val tableHeight = tableWidth / 2
+            if (tableHeight < height / 5 || tableHeight > height * 4 / 5) {
+                tableWidth += candidateStep
+                continue
+            }
 
-        for (left in minX until maxX step step) {
-
-            for (right in left + width / 4 until maxX step step) {
-
-                for (top in minY until maxY step step) {
-
-                    val bottom = top + (right - left) / 2
-
-                    if (bottom >= maxY) continue
-
-                    val horizontalTop = edgeCount(
-                        edges, width,
-                        left, top, right, top, step
-                    )
-
-                    val horizontalBottom = edgeCount(
-                        edges, width,
-                        left, bottom, right, bottom, step
-                    )
-
-                    val verticalLeft = edgeCount(
-                        edges, width,
-                        left, top, left, bottom, step
-                    )
-
-                    val verticalRight = edgeCount(
-                        edges, width,
-                        right, top, right, bottom, step
-                    )
-
-                    val score =
-                        horizontalTop +
-                        horizontalBottom +
-                        verticalLeft +
-                        verticalRight
+            var left = minX
+            while (left + tableWidth <= maxX) {
+                val right = left + tableWidth
+                var top = minY
+                while (top + tableHeight <= maxY) {
+                    val bottom = top + tableHeight
+                    val topScore = edgeCount(edges, width, left, top, right, top, lineStep)
+                    val bottomScore = edgeCount(edges, width, left, bottom, right, bottom, lineStep)
+                    val leftScore = edgeCount(edges, width, left, top, left, bottom, lineStep)
+                    val rightScore = edgeCount(edges, width, right, top, right, bottom, lineStep)
+                    val perimeterSamples = max(1, (2 * (tableWidth + tableHeight)) / lineStep)
+                    val score = (topScore + bottomScore + leftScore + rightScore).toFloat() /
+                        perimeterSamples
 
                     if (score > bestScore) {
                         bestScore = score
-
-                        best = RectF(
-                            left.toFloat(),
-                            top.toFloat(),
-                            right.toFloat(),
-                            bottom.toFloat()
-                        )
+                        best = RectF(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
                     }
+                    top += candidateStep
                 }
+                left += candidateStep
             }
+            tableWidth += candidateStep
         }
 
-        return best
+        return if (bestScore >= 0.08f) best else null
     }
 
     private fun edgeCount(
