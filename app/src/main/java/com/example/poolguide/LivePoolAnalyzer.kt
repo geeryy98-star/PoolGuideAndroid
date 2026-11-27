@@ -108,7 +108,7 @@ object LivePoolAnalyzer {
             )
             if (balls.isEmpty()) {
                 return GuideFrameAnalysis(
-                    "Bolas: 0; mesa calibrada, sin candidatos",
+                    "Bolas: 0; mesa ${calibratedBounds.width().toInt()}x${calibratedBounds.height().toInt()} px; radio ${expectedRadius.toInt()} px; sin candidatos",
                     floatArrayOf(), width, height
                 )
             }
