@@ -153,13 +153,13 @@ object LivePoolAnalyzer {
                 val ey = (table.bounds.top + segment.end.y * tableWidth) * factorY
 
                 if (width < height) {
-                    // Inverse of the 90° clockwise bitmap rotation:
-                    // originalX = rotatedY, originalY = originalHeight - rotatedX.
+                    // Inverse of the 90° clockwise bitmap rotation, converting
+                    // from the scaled rotated bitmap back to original screen pixels.
                     listOf(
-                        sy,
-                        height.toFloat() - sx,
-                        ey,
-                        height.toFloat() - ex
+                        (table.bounds.top + segment.start.y * tableWidth) * (width.toFloat() / bitmap.height),
+                        height.toFloat() - (table.bounds.left + segment.start.x * tableWidth) * (height.toFloat() / bitmap.width),
+                        (table.bounds.top + segment.end.y * tableWidth) * (width.toFloat() / bitmap.height),
+                        height.toFloat() - (table.bounds.left + segment.end.x * tableWidth) * (height.toFloat() / bitmap.width)
                     )
                 } else {
                     listOf(sx, sy, ex, ey)
