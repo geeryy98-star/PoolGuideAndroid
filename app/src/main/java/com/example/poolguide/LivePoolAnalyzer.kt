@@ -204,7 +204,7 @@ object LivePoolAnalyzer {
                 .firstOrNull()
                 ?: return GuideFrameAnalysis(
                     "Bolas ${balls.size}; blanca OK; 0 tiros (${result.message})",
-                    floatArrayOf(), width, height
+                    floatArrayOf(), width, height, screenMarkers, cueBallIndex
                 )
 
             val tableWidth = table.bounds.width()
