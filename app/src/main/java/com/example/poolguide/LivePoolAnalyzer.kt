@@ -53,10 +53,17 @@ object LivePoolAnalyzer {
 
         try {
             val table = TableDetector.detect(bitmap)
-                ?: return GuideFrameAnalysis("Buscando mesa de billar…", floatArrayOf(), width, height)
+                ?: return GuideFrameAnalysis(
+                    "Sin rectángulo válido (${bitmap.width}x${bitmap.height}); buscando mesa…",
+                    floatArrayOf(), width, height
+                )
 
+            val confidencePercent = (table.confidence * 100f).toInt()
             if (table.confidence < 0.08f || table.pockets.size != 6) {
-                return GuideFrameAnalysis("Mesa detectada con poca confianza; ajustando…", floatArrayOf(), width, height)
+                return GuideFrameAnalysis(
+                    "Mesa candidata ${confidencePercent}%; validación insuficiente (${bitmap.width}x${bitmap.height})",
+                    floatArrayOf(), width, height
+                )
             }
 
             val expectedRadius = table.bounds.width() * 0.012f
@@ -67,7 +74,10 @@ object LivePoolAnalyzer {
                 maxBalls = 16
             )
             if (balls.isEmpty()) {
-                return GuideFrameAnalysis("Mesa localizada; buscando bolas…", floatArrayOf(), width, height)
+                return GuideFrameAnalysis(
+                    "Mesa validada ${confidencePercent}%; buscando bolas…",
+                    floatArrayOf(), width, height
+                )
             }
 
             val cue = balls.maxByOrNull { ball ->
