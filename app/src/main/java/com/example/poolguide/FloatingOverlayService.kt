@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -15,6 +17,12 @@ class FloatingOverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var overlay: GuideOverlayView? = null
     private var trajectoryOverlay: TrajectoryOverlayView? = null
+    private var calibrationOverlay: CalibrationOverlay? = null
+    private val calibrationReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action == "com.example.poolguide.START_CALIBRATION") startCalibration()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -42,6 +50,13 @@ class FloatingOverlayService : Service() {
             startForeground(1, notification)
         }
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val calibrationFilter = IntentFilter("com.example.poolguide.START_CALIBRATION")
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(calibrationReceiver, calibrationFilter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(calibrationReceiver, calibrationFilter)
+        }
         trajectoryOverlay = TrajectoryOverlayView(this)
         val trajectoryParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -69,7 +84,44 @@ class FloatingOverlayService : Service() {
         windowManager.addView(overlay, params)
     }
 
+    private fun startCalibration() {
+        if (calibrationOverlay != null) return
+        val view = CalibrationOverlay(
+            this,
+            onComplete = { taps ->
+                try {
+                    TableCalibration.save(this, taps)
+                    sendBroadcast(Intent(ScreenCaptureService.ACTION_CAPTURE_STATUS)
+                        .setPackage(packageName)
+                        .putExtra("status", "Calibración guardada: mesa y 6 troneras"))
+                } catch (error: Exception) {
+                    sendBroadcast(Intent(ScreenCaptureService.ACTION_CAPTURE_STATUS)
+                        .setPackage(packageName)
+                        .putExtra("status", "Error de calibración: revisa las 4 esquinas"))
+                }
+                finishCalibration()
+            },
+            onCancel = { finishCalibration() }
+        )
+        calibrationOverlay = view
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        windowManager.addView(view, params)
+    }
+
+    private fun finishCalibration() {
+        calibrationOverlay?.let { runCatching { windowManager.removeView(it) } }
+        calibrationOverlay = null
+    }
+
     override fun onDestroy() {
+        try { unregisterReceiver(calibrationReceiver) } catch (_: Exception) {}
+        finishCalibration()
         overlay?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         trajectoryOverlay?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         overlay = null
