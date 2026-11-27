@@ -350,6 +350,8 @@ object TableDetector {
         bounds: RectF
     ): List<DetectedPocket> {
         val result = mutableListOf<DetectedPocket>()
+        val imagePixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(imagePixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         val minDimension = min(bounds.width(), bounds.height())
         val diskRadius = max(3, (minDimension * 0.018f).toInt())
         val ringInner = diskRadius + 2
@@ -374,7 +376,7 @@ object TableDetector {
         )
 
         fun luminance(x: Int, y: Int): Int {
-            val color = bitmap.getPixel(x, y)
+            val color = imagePixels[y * bitmap.width + x]
             val red = (color shr 16) and 0xFF
             val green = (color shr 8) and 0xFF
             val blue = color and 0xFF
