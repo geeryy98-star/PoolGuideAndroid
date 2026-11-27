@@ -140,14 +140,22 @@ object BallDetector {
                         angles
                     )
 
-                    if (score >= MIN_CONFIDENCE) {
-
+                    // A circular edge alone is not enough: table markings and
+                    // reflections can also form rings. A real ball should have
+                    // a measurable colour change from its centre to the felt
+                    // immediately outside its rim.
+                    val contrast = circleContrast(
+                        pixels, width, height, cx, cy, radius
+                    )
+                    val confidence = score * (0.35f + 0.65f * contrast)
+                    if (score >= MIN_CONFIDENCE && contrast >= 0.25f &&
+                        confidence >= MIN_CONFIDENCE) {
                         candidates.add(
                             DetectedBall(
                                 centerX = left + cx.toFloat(),
                                 centerY = top + cy.toFloat(),
                                 radius = radius.toFloat(),
-                                confidence = score
+                                confidence = confidence
                             )
                         )
                     }
@@ -175,6 +183,61 @@ object BallDetector {
         )
 
         return suppressDuplicates(candidates, maxBalls)
+    }
+
+    /**
+     * Compares the inner ball colour with a narrow ring just outside its rim.
+     * This rejects many false circles created by cloth texture, table markings
+     * and UI edges while retaining striped and solid balls.
+     */
+    private fun circleContrast(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        centerX: Int,
+        centerY: Int,
+        radius: Int
+    ): Float {
+        var innerR = 0L
+        var innerG = 0L
+        var innerB = 0L
+        var innerCount = 0
+        var outerR = 0L
+        var outerG = 0L
+        var outerB = 0L
+        var outerCount = 0
+        val innerLimit = radius * radius * 0.36f
+        val outerMin = radius * radius * 1.05f
+        val outerMax = radius * radius * 1.69f
+        val extent = max(2, (radius * 1.3f).roundToInt())
+        for (dy in -extent..extent) {
+            for (dx in -extent..extent) {
+                val d2 = (dx * dx + dy * dy).toFloat()
+                val x = centerX + dx
+                val y = centerY + dy
+                if (x !in 0 until width || y !in 0 until height) continue
+                val color = pixels[y * width + x]
+                val red = (color shr 16) and 255
+                val green = (color shr 8) and 255
+                val blue = color and 255
+                if (d2 <= innerLimit) {
+                    innerR += red
+                    innerG += green
+                    innerB += blue
+                    innerCount++
+                } else if (d2 in outerMin..outerMax) {
+                    outerR += red
+                    outerG += green
+                    outerB += blue
+                    outerCount++
+                }
+            }
+        }
+        if (innerCount == 0 || outerCount == 0) return 0f
+        val dr = innerR.toFloat() / innerCount - outerR.toFloat() / outerCount
+        val dg = innerG.toFloat() / innerCount - outerG.toFloat() / outerCount
+        val db = innerB.toFloat() / innerCount - outerB.toFloat() / outerCount
+        return (sqrt(dr * dr + dg * dg + db * db) / 110f).coerceIn(0f, 1f)
     }
 
     private fun calculateEdges(
