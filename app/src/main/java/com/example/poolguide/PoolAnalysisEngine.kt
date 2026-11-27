@@ -28,7 +28,8 @@ object PoolAnalysisEngine {
         pocketCentersPx: List<PoolPoint>,
         expectedRadiusPx: Float? = null,
         pocketCaptureRadiusPx: Float? = null,
-        maxRebounds: Int = 2
+        maxRebounds: Int = 2,
+        preDetectedBalls: List<DetectedBall>? = null
     ): PoolAnalysisResult {
 
         if (bitmap.isRecycled) {
@@ -46,7 +47,7 @@ object PoolAnalysisEngine {
             return emptyResult("Se necesitan las 6 troneras")
         }
 
-        val detected = BallDetector.detect(
+        val detected = preDetectedBalls ?: BallDetector.detect(
             bitmap = bitmap,
             tableBounds = tableBoundsPx,
             expectedRadiusPx = expectedRadiusPx,
