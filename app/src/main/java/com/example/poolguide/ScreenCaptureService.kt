@@ -17,6 +17,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.view.Surface
 import android.view.WindowManager
@@ -29,6 +30,7 @@ class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    private var analysisThread: HandlerThread? = null
 
     private var frames = 0
     private var lastReport = System.currentTimeMillis()
@@ -94,6 +96,8 @@ class ScreenCaptureService : Service() {
                 3
             )
 
+            analysisThread = HandlerThread("PoolGuideFrameAnalysis").apply { start() }
+
             imageReader?.setOnImageAvailableListener(
                 { reader ->
                     val image = reader.acquireLatestImage()
@@ -115,27 +119,13 @@ class ScreenCaptureService : Service() {
                                     (now - lastReport) / 1000.0
 
                                 val fps = frames / seconds
-                                val brightness =
-                                    measureBrightness(image)
-
-                                val candidates =
-                                    detectWhiteGroups(image)
-
-                                val rotation =
-                                    getScreenRotation()
-
-                                val message = String.format(
-                                    Locale.US,
-                                    "%d° %dx%d F%.0f L%d C%d",
-                                    rotation,
-                                    image.width,
-                                    image.height,
-                                    fps,
-                                    brightness,
-                                    candidates
+                                val analysis = LivePoolAnalyzer.analyze(image)
+                                sendStatus(analysis.message)
+                                sendGuideLines(
+                                    analysis.screenLines,
+                                    analysis.screenWidth,
+                                    analysis.screenHeight
                                 )
-
-                                sendStatus(message)
 
                                 frames = 0
                                 lastReport = now
@@ -148,7 +138,7 @@ class ScreenCaptureService : Service() {
                         }
                     }
                 },
-                Handler(mainLooper)
+                Handler(analysisThread?.looper ?: mainLooper)
             )
 
             mediaProjection?.registerCallback(
@@ -360,6 +350,16 @@ class ScreenCaptureService : Service() {
         return groups
     }
 
+    private fun sendGuideLines(lines: FloatArray, width: Int, height: Int) {
+        val intent = Intent("com.example.poolguide.GUIDE_LINES").apply {
+            setPackage(packageName)
+            putExtra("lines", lines)
+            putExtra("screen_width", width)
+            putExtra("screen_height", height)
+        }
+        sendBroadcast(intent)
+    }
+
     private fun sendStatus(message: String) {
         createNotification(message)
 
@@ -404,6 +404,8 @@ class ScreenCaptureService : Service() {
         virtualDisplay?.release()
         imageReader?.setOnImageAvailableListener(null, null)
         imageReader?.close()
+        analysisThread?.quitSafely()
+        analysisThread = null
         mediaProjection?.stop()
 
         virtualDisplay = null
