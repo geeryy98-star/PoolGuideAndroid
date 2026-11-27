@@ -307,8 +307,8 @@ object TableDetector {
             result.add(
                 DetectedPocket(
                     center = PoolPoint(
-                        x / width,
-                        y / height
+                        x,
+                        y
                     ),
                     radius = radius / width,
                     confidence = confidence
