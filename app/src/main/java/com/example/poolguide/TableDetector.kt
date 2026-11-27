@@ -200,13 +200,13 @@ object TableDetector {
                 var top = minY
                 while (top + tableHeight <= maxY) {
                     val bottom = top + tableHeight
-                    val topScore = edgeCount(edges, width, left, top, right, top, lineStep)
-                    val bottomScore = edgeCount(edges, width, left, bottom, right, bottom, lineStep)
-                    val leftScore = edgeCount(edges, width, left, top, left, bottom, lineStep)
-                    val rightScore = edgeCount(edges, width, right, top, right, bottom, lineStep)
-                    val perimeterSamples = max(1, (2 * (tableWidth + tableHeight)) / lineStep)
-                    val score = (topScore + bottomScore + leftScore + rightScore).toFloat() /
-                        perimeterSamples
+                    val topScore = edgeCoverage(edges, width, height, left, top, right, top, lineStep)
+                    val bottomScore = edgeCoverage(edges, width, height, left, bottom, right, bottom, lineStep)
+                    val leftScore = edgeCoverage(edges, width, height, left, top, left, bottom, lineStep)
+                    val rightScore = edgeCoverage(edges, width, height, right, top, right, bottom, lineStep)
+                    // Each side is scored as a proportion of samples with an edge nearby.
+                    // This tolerates anti-aliasing and small offsets in the coarse search grid.
+                    val score = (topScore + bottomScore + leftScore + rightScore) / 4f
 
                     if (score > bestScore) {
                         bestScore = score
@@ -219,7 +219,51 @@ object TableDetector {
             tableWidth += candidateStep
         }
 
-        return if (bestScore >= 0.08f) best else null
+        return if (bestScore >= 0.16f) best else null
+    }
+
+    /**
+     * Fraction of samples along a candidate border that have an edge within
+     * a small neighbourhood. Exact-pixel sampling was too brittle: the search
+     * grid often landed a few pixels beside the rendered table rail.
+     */
+    private fun edgeCoverage(
+        edges: BooleanArray,
+        width: Int,
+        height: Int,
+        x1: Int,
+        y1: Int,
+        x2: Int,
+        y2: Int,
+        step: Int
+    ): Float {
+        val dx = x2 - x1
+        val dy = y2 - y1
+        val distance = sqrt((dx * dx + dy * dy).toFloat()).toInt()
+        if (distance <= 0) return 0f
+        val samples = max(1, distance / step)
+        val tolerance = 3
+        var hits = 0
+        for (i in 0..samples) {
+            val fraction = i.toFloat() / samples
+            val x = (x1 + dx * fraction).toInt()
+            val y = (y1 + dy * fraction).toInt()
+            var found = false
+            for (oy in -tolerance..tolerance) {
+                for (ox in -tolerance..tolerance) {
+                    val sx = x + ox
+                    val sy = y + oy
+                    if (sx in 0 until width && sy in 0 until height &&
+                        edges[sy * width + sx]) {
+                        found = true
+                        break
+                    }
+                }
+                if (found) break
+            }
+            if (found) hits++
+        }
+        return hits.toFloat() / (samples + 1)
     }
 
     private fun edgeCount(
@@ -329,29 +373,23 @@ object TableDetector {
         bounds: RectF
     ): Float {
 
-        val horizontal = edgeCount(
-            edges,
-            width,
-            bounds.left.toInt(),
-            bounds.top.toInt(),
-            bounds.right.toInt(),
-            bounds.top.toInt(),
-            3
-        )
+        val height = edges.size / width
+        val step = max(2, min(width, height) / 120)
+        val left = bounds.left.toInt().coerceIn(0, width - 1)
+        val right = bounds.right.toInt().coerceIn(0, width - 1)
+        val top = bounds.top.toInt().coerceIn(0, height - 1)
+        val bottom = bounds.bottom.toInt().coerceIn(0, height - 1)
 
-        val vertical = edgeCount(
-            edges,
-            width,
-            bounds.left.toInt(),
-            bounds.top.toInt(),
-            bounds.left.toInt(),
-            bounds.bottom.toInt(),
-            3
+        // Confidence is the mean coverage of all four rails, not just the
+        // top and left edges. A table-shaped rectangle needs four supported sides.
+        val coverage = listOf(
+            edgeCoverage(edges, width, height, left, top, right, top, step),
+            edgeCoverage(edges, width, height, left, bottom, right, bottom, step),
+            edgeCoverage(edges, width, height, left, top, left, bottom, step),
+            edgeCoverage(edges, width, height, right, top, right, bottom, step)
         )
-
-        return min(
-            1f,
-            (horizontal + vertical) / 80f
-        )
+        val weakestSide = coverage.minOrNull() ?: 0f
+        val average = coverage.average().toFloat()
+        return (average * 0.7f + weakestSide * 0.3f).coerceIn(0f, 1f)
     }
 }
