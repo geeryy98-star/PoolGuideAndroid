@@ -24,20 +24,25 @@ class TrajectoryOverlayView(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
     }
     private var lines = floatArrayOf()
+    private var enabled = false
     private var sourceWidth = 0
     private var sourceHeight = 0
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            lines = intent?.getFloatArrayExtra("lines") ?: floatArrayOf()
-            sourceWidth = intent?.getIntExtra("screen_width", 0) ?: 0
-            sourceHeight = intent?.getIntExtra("screen_height", 0) ?: 0
+            if (intent?.action == "com.example.poolguide.GUIDE_TOGGLE") {
+                enabled = intent.getBooleanExtra("enabled", false)
+            } else {
+                lines = intent?.getFloatArrayExtra("lines") ?: floatArrayOf()
+                sourceWidth = intent?.getIntExtra("screen_width", 0) ?: 0
+                sourceHeight = intent?.getIntExtra("screen_height", 0) ?: 0
+            }
             invalidate()
         }
     }
 
     init {
-        val filter = IntentFilter("com.example.poolguide.GUIDE_LINES")
+        val filter = IntentFilter("com.example.poolguide.GUIDE_LINES").apply { addAction("com.example.poolguide.GUIDE_TOGGLE") }
         if (Build.VERSION.SDK_INT >= 33) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -49,7 +54,7 @@ class TrajectoryOverlayView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (sourceWidth <= 0 || sourceHeight <= 0 || lines.size < 4) return
+        if (!enabled || sourceWidth <= 0 || sourceHeight <= 0 || lines.size < 4) return
         val sx = width.toFloat() / sourceWidth
         val sy = height.toFloat() / sourceHeight
         var index = 0
