@@ -93,29 +93,44 @@ object LivePoolAnalyzer {
                 )
             }
 
+            // Evaluate several pixels in the inner disk: the Hough centre can
+            // land on a stripe, highlight or antialiased edge.
+            fun whiteScore(ball: DetectedBall): Float {
+                var samples = 0
+                var white = 0
+                val sampleRadius = max(1, (ball.radius * 0.42f).toInt())
+                val cx = ball.centerX.toInt()
+                val cy = ball.centerY.toInt()
+                val sampleStep = max(1, sampleRadius / 2)
+                for (oy in -sampleRadius..sampleRadius step sampleStep) {
+                    for (ox in -sampleRadius..sampleRadius step sampleStep) {
+                        if (ox * ox + oy * oy > sampleRadius * sampleRadius) continue
+                        val x = (cx + ox).coerceIn(0, bitmap.width - 1)
+                        val y = (cy + oy).coerceIn(0, bitmap.height - 1)
+                        val color = bitmap.getPixel(x, y)
+                        val red = (color shr 16) and 0xFF
+                        val green = (color shr 8) and 0xFF
+                        val blue = color and 0xFF
+                        val brightness = (red + green + blue) / 3
+                        val saturation = maxOf(red, green, blue) - minOf(red, green, blue)
+                        samples++
+                        if (brightness >= 165 && saturation <= 75 &&
+                            minOf(red, green, blue) >= 125) white++
+                    }
+                }
+                return if (samples == 0) 0f else white.toFloat() / samples
+            }
+
             val cue = balls.maxByOrNull { ball ->
-                val x = ball.centerX.toInt().coerceIn(0, bitmap.width - 1)
-                val y = ball.centerY.toInt().coerceIn(0, bitmap.height - 1)
-                val color = bitmap.getPixel(x, y)
-                val red = (color shr 16) and 0xFF
-                val green = (color shr 8) and 0xFF
-                val blue = color and 0xFF
-                val brightness = (red + green + blue) / 3
-                val saturation = maxOf(red, green, blue) - minOf(red, green, blue)
-                brightness - saturation * 0.65f
+                whiteScore(ball) * 0.82f + ball.confidence * 0.18f
             } ?: return GuideFrameAnalysis("No se identifica la bola blanca", floatArrayOf(), width, height)
 
-            val color = bitmap.getPixel(
-                cue.centerX.toInt().coerceIn(0, bitmap.width - 1),
-                cue.centerY.toInt().coerceIn(0, bitmap.height - 1)
-            )
-            val red = (color shr 16) and 0xFF
-            val green = (color shr 8) and 0xFF
-            val blue = color and 0xFF
-            val brightness = (red + green + blue) / 3
-            val saturation = maxOf(red, green, blue) - minOf(red, green, blue)
-            if (brightness < 150 || saturation > 95) {
-                return GuideFrameAnalysis("Mesa y bolas detectadas; no se confirma la blanca", floatArrayOf(), width, height)
+            val cueWhiteness = whiteScore(cue)
+            if (cueWhiteness < 0.48f) {
+                return GuideFrameAnalysis(
+                    "Mesa y bolas detectadas; blanca sin confirmar (" + (cueWhiteness * 100).toInt() + "%)",
+                    floatArrayOf(), width, height
+                )
             }
 
             val factorX = width.toFloat() / bitmap.width
