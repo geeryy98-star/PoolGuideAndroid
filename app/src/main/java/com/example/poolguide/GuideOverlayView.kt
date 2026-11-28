@@ -91,9 +91,14 @@ class GuideOverlayView(
             if (guides) "Guía activada" else "Guía desactivada",
             18f, 53f, text
         )
+        // Diagnostics can be longer than one line; show both lines so the
+        // user can read image quality, crop and detector stage values in-app.
         canvas.drawText(captureStatus.take(48), 18f, 80f, text)
-        canvas.drawText("CALIBRAR MESA (4 esquinas + 6 troneras)", 18f, 118f, text)
-        canvas.drawText("Toca arriba para activar/desactivar · abajo para cerrar", 18f, 153f, text)
+        if (captureStatus.length > 48) {
+            canvas.drawText(captureStatus.drop(48).take(48), 18f, 100f, text)
+        }
+        canvas.drawText("CALIBRAR MESA (4 esquinas + 6 troneras)", 18f, 132f, text)
+        canvas.drawText("Toca arriba para activar/desactivar · abajo para cerrar", 18f, 166f, text)
 
 
     }
