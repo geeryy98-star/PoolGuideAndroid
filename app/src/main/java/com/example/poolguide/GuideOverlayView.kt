@@ -1,0 +1,178 @@
+
+package com.example.poolguide
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.os.Build
+import android.view.MotionEvent
+import android.view.View
+import android.widget.Toast
+import android.view.WindowManager
+
+class GuideOverlayView(
+    context: Context,
+    private val close: () -> Unit
+) : View(context) {
+
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xDD172033.toInt()
+    }
+
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 16f
+    }
+
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.YELLOW
+        strokeWidth = 5f
+        style = Paint.Style.STROKE
+    }
+
+    private val red = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.CYAN
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
+    }
+
+    private var guides = true
+    private var captureStatus = "Captura: esperando datos"
+
+    private var downX = 0f
+    private var downY = 0f
+    private var startX = 0
+    private var startY = 0
+
+    private val panel = RectF(0f, 0f, 520f, 184f)
+
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            captureStatus = intent?.getStringExtra("status")
+                ?: "Captura: sin datos"
+            invalidate()
+        }
+    }
+
+    init {
+        val filter = IntentFilter("com.example.poolguide.CAPTURE_STATUS")
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(
+                statusReceiver,
+                filter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(statusReceiver, filter)
+        }
+    }
+
+    override fun onMeasure(
+        widthMeasureSpec: Int,
+        heightMeasureSpec: Int
+    ) {
+        setMeasuredDimension(540, 200)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+
+        canvas.drawRoundRect(panel, 18f, 18f, bg)
+
+        canvas.drawText("POOL GUIDE", 18f, 28f, text)
+        canvas.drawText(
+            if (guides) "Guía activada" else "Guía desactivada",
+            18f, 53f, text
+        )
+        // Diagnostics can be longer than one line; show both lines so the
+        // user can read image quality, crop and detector stage values in-app.
+        canvas.drawText(captureStatus.take(48), 18f, 80f, text)
+        if (captureStatus.length > 48) {
+            canvas.drawText(captureStatus.drop(48).take(48), 18f, 100f, text)
+        }
+        canvas.drawText("CALIBRAR MESA (4 esquinas + 6 troneras)", 18f, 132f, text)
+        canvas.drawText("Toca arriba para activar/desactivar · abajo para cerrar", 18f, 166f, text)
+
+
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.rawX
+                downY = event.rawY
+
+                val lp = layoutParams as? WindowManager.LayoutParams
+                startX = lp?.x ?: 0
+                startY = lp?.y ?: 0
+
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (event.eventTime - event.downTime > 250) {
+                    val lp = layoutParams as? WindowManager.LayoutParams
+
+                    if (lp != null) {
+                        lp.x = startX + (event.rawX - downX).toInt()
+                        lp.y = startY + (event.rawY - downY).toInt()
+
+                        (context.getSystemService(Context.WINDOW_SERVICE)
+                            as WindowManager).updateViewLayout(this, lp)
+                    }
+                }
+
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                val dx = event.rawX - downX
+                val dy = event.rawY - downY
+
+                if (kotlin.math.abs(dx) < 12 &&
+                    kotlin.math.abs(dy) < 12
+                ) {
+                    when {
+                        event.y >= 92f && event.y <= 140f -> {
+                            context.sendBroadcast(
+                                Intent("com.example.poolguide.START_CALIBRATION")
+                                    .setPackage(context.packageName)
+                            )
+                            Toast.makeText(context, "Iniciando calibración de mesa", Toast.LENGTH_SHORT).show()
+                        }
+                        event.y > 140f -> close()
+                        else -> {
+                            guides = !guides
+                            context.sendBroadcast(
+                                Intent("com.example.poolguide.GUIDE_TOGGLE")
+                                    .setPackage(context.packageName)
+                                    .putExtra("enabled", guides)
+                            )
+                            invalidate()
+                        }
+                    }
+                }
+
+                return true
+            }
+        }
+
+        return true
+    }
+
+    override fun onDetachedFromWindow() {
+        try {
+            context.unregisterReceiver(statusReceiver)
+        } catch (_: Exception) {
+        }
+
+        super.onDetachedFromWindow()
+    }
+}
