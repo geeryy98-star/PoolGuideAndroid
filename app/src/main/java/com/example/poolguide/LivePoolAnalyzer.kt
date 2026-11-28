@@ -110,7 +110,7 @@ object LivePoolAnalyzer {
             if (balls.isEmpty()) {
                 val maxScore = (detection.maxCircleScore * 100f).toInt()
                 return GuideFrameAnalysis(
-                    "0 bolas | mesa ${calibratedBounds.width().toInt()}x${calibratedBounds.height().toInt()} | r${expectedRadius.toInt()} | circ:${detection.circleCandidates} max:${maxScore}% blob:${detection.blobCandidates}",
+                    "0 bolas | img:${bitmap.width}x${bitmap.height} | mesa:${calibratedBounds.width().toInt()}x${calibratedBounds.height().toInt()} | r${expectedRadius.toInt()} | gris:${detection.grayMin}-${detection.grayMax} edge:${detection.edgePixelCount} circ:${detection.circleCandidates} max:${maxScore}% blob:${detection.blobCandidates}",
                     floatArrayOf(), width, height
                 )
             }
