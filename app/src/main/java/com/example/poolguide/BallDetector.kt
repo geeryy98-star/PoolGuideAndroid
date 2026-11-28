@@ -24,7 +24,10 @@ data class BallDetectionReport(
     val circleCandidates: Int,
     val blobCandidates: Int,
     val maxCircleScore: Float,
-    val estimatedRadius: Float
+    val estimatedRadius: Float,
+    val edgePixelCount: Int = 0,
+    val grayMin: Int = 0,
+    val grayMax: Int = 0
 )
 
 object BallDetector {
@@ -109,6 +112,11 @@ object BallDetector {
         }
 
         val edges = calculateEdges(gray, width, height)
+        // These frame-level measurements distinguish a genuinely empty/flat
+        // crop from a detector whose radius or candidate filters are wrong.
+        val edgePixelCount = edges.count { it >= EDGE_THRESHOLD }
+        val grayMin = gray.minOrNull()?.toInt() ?: 0
+        val grayMax = gray.maxOrNull()?.toInt() ?: 0
 
         val estimatedRadius =
             expectedRadiusPx ?: (width * 0.012f)
@@ -214,7 +222,10 @@ object BallDetector {
             circleCandidates = circleCount,
             blobCandidates = blobs.size,
             maxCircleScore = maxCircleScore,
-            estimatedRadius = estimatedRadius
+            estimatedRadius = estimatedRadius,
+            edgePixelCount = edgePixelCount,
+            grayMin = grayMin,
+            grayMax = grayMax
         )
     }
 
